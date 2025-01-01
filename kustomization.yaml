@@ -7,4 +7,4 @@ resources:
   - kubernetes/service.yaml
   - kubernetes/ingress.yaml
 
-namespace: zwave
+namespace: zwavejs
