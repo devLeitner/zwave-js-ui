@@ -6,5 +6,6 @@ resources:
   - kubernetes/deployment.yaml
   - kubernetes/service.yaml
   - kubernetes/ingress.yaml
+	- kubernetes/pvc.yaml
 
 namespace: zwavejs
