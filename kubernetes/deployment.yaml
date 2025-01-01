@@ -66,7 +66,6 @@ spec:
           # Instead, use the /dev/serial/by-id/X serial device for your Z-Wave stick.
           path: /dev/serial/by-id/usb-Silicon_Labs_CP2102N_USB_to_UART_Bridge_Controller_2678575d2985ed11b48cc89f9d1cc348-if00-port0
           type: CharDevice
-                - name: config
       - name: zwavejs    
 	      persistentVolumeClaim:
           claimName: zwavejs
