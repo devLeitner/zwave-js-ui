@@ -2,8 +2,8 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: zwave
-	namespace: zwavejs
-	annotations:
+  namespace: zwavejs
+  annotations:
     cert-manager.io/cluster-issuer: letsencrypt-certificate
     kuberentes.io/ingress.class: traefik
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
