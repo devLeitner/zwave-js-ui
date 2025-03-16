@@ -19,6 +19,7 @@ import {
 	createDefaultTransportFormat,
 	FirmwareFileFormat,
 	tryUnzipFirmwareFile,
+	extractFirmwareAsync,
 } from '@zwave-js/core'
 import { JSONTransport } from '@zwave-js/log-transport-json'
 import { isDocker } from '@zwave-js/shared'
@@ -34,7 +35,6 @@ import {
 	Driver,
 	ExclusionOptions,
 	ExclusionStrategy,
-	extractFirmware,
 	FirmwareUpdateCapabilities,
 	FirmwareUpdateProgress,
 	FirmwareUpdateResult,
@@ -175,6 +175,7 @@ export const allowedApis = validateMethods([
 	'pollValue',
 	'setPowerlevel',
 	'setRFRegion',
+	'setMaxLRPowerLevel',
 	'updateControllerNodeProps',
 	'startInclusion',
 	'startExclusion',
@@ -531,6 +532,7 @@ export type ZUINode = {
 	isControllerNode?: boolean
 	powerlevel?: number
 	measured0dBm?: number
+	maxLongRangePowerlevel?: number
 	RFRegion?: RFRegion
 	rfRegions?: { text: string; value: number }[]
 	isFrequentListening?: FLiRS
@@ -621,6 +623,7 @@ export type ZwaveConfig = {
 	disableControllerRecovery?: boolean
 	rf?: {
 		region?: RFRegion
+		maxLongRangePowerlevel?: number
 		txPower?: {
 			powerlevel: number
 			measured0dBm: number
@@ -812,23 +815,6 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		this.scenes = jsonStore.get(store.scenes)
 
 		this._nodes = new Map()
-		this.storeNodes = jsonStore.get(store.nodes)
-
-		// convert store nodes from array to object
-		if (Array.isArray(this.storeNodes)) {
-			const storeNodes = {}
-
-			for (let i = 0; i < this.storeNodes.length; i++) {
-				if (this.storeNodes[i]) {
-					storeNodes[i] = this.storeNodes[i]
-				}
-			}
-
-			this.storeNodes = storeNodes
-
-			// eslint-disable-next-line @typescript-eslint/no-floating-promises
-			this.updateStoreNodes(false)
-		}
 
 		this._devices = {}
 		this.driverInfo = {}
@@ -2204,12 +2190,16 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		}
 
 		if (this.cfg.rf) {
-			const { region, txPower } = this.cfg.rf
+			const { region, txPower, maxLongRangePowerlevel } = this.cfg.rf
 
 			zwaveOptions.rf = {}
 
 			if (typeof region === 'number') {
 				zwaveOptions.rf.region = region
+			}
+
+			if (typeof maxLongRangePowerlevel === 'number') {
+				zwaveOptions.rf.maxLongRangePowerlevel = maxLongRangePowerlevel
 			}
 
 			if (
@@ -2483,10 +2473,63 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 
 	// ------------NODES MANAGEMENT-----------------------------------
 
+	async getStoreNodes() {
+		if (!this.homeHex) {
+			throw new Error('HomeHex not set')
+		}
+
+		let nodes = jsonStore.get(store.nodes)
+
+		// back compatibility fixes
+
+		// convert store nodes from array to object
+		if (Array.isArray(nodes)) {
+			const storeNodes = {}
+
+			for (let i = 0; i < nodes.length; i++) {
+				if (nodes[i]) {
+					storeNodes[i] = nodes[i]
+				}
+			}
+
+			nodes = storeNodes
+		}
+
+		const keys = Object.keys(nodes)
+
+		// ensure store nodes are stored using homeHex
+		if (keys.length > 0 && !keys[0].startsWith('0x')) {
+			this.storeNodes = nodes
+			await jsonStore.put(store.nodes, {
+				[this.homeHex]: nodes,
+			})
+		} else {
+			this.storeNodes = nodes[this.homeHex] || {}
+		}
+	}
+
 	async updateStoreNodes(throwError = true) {
 		try {
+			if (!this.homeHex) {
+				logger.warn('HomeHex not set, skipping storeDevices')
+				return
+			}
+
+			const nodes = jsonStore.get(store.nodes)
+
+			// remove empty objects keys
+			nodes[this.homeHex] = Object.keys(this.storeNodes).reduce(
+				(acc, k) => {
+					if (Object.keys(this.storeNodes[k]).length > 0) {
+						acc[k] = this.storeNodes[k]
+					}
+					return acc
+				},
+				{},
+			)
+
 			logger.debug('Updating store nodes.json')
-			await jsonStore.put(store.nodes, this.storeNodes)
+			await jsonStore.put(store.nodes, nodes)
 		} catch (error) {
 			logger.error(
 				`Error while updating store nodes: ${error.message}`,
@@ -3102,6 +3145,19 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 	async setRFRegion(region: RFRegion): Promise<boolean> {
 		if (this.driverReady) {
 			const result = await this._driver.controller.setRFRegion(region)
+			await this.updateControllerNodeProps(null, ['RFRegion'])
+			return result
+		}
+
+		throw new DriverNotReadyError()
+	}
+
+	async setMaxLRPowerLevel(powerlevel: number): Promise<boolean> {
+		if (this.driverReady) {
+			const result =
+				await this._driver.controller.setMaxLongRangePowerlevel(
+					powerlevel,
+				)
 			await this.updateControllerNodeProps(null, ['RFRegion'])
 			return result
 		}
@@ -3858,7 +3914,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 
 			try {
 				const format = guessFirmwareFileFormat(file.name, file.data)
-				firmware = extractFirmware(file.data, format)
+				firmware = await extractFirmwareAsync(file.data, format)
 			} catch (err) {
 				throw Error(
 					`Unable to extract firmware from file '${file.name}'`,
@@ -3873,7 +3929,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		}
 	}
 
-	updateFirmware(
+	async updateFirmware(
 		nodeId: number,
 		files: FwFile[],
 	): Promise<FirmwareUpdateResult> {
@@ -3921,7 +3977,10 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 							format = guessFirmwareFileFormat(name, data)
 						}
 
-						const firmware = extractFirmware(data, format)
+						const firmware = await extractFirmwareAsync(
+							data,
+							format,
+						)
 						if (f.target !== undefined) {
 							firmware.firmwareTarget = f.target
 						}
@@ -4402,6 +4461,14 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		// reset retries
 		this.backoffRetry = 0
 
+		this.driverInfo.homeid = this._driver.controller.homeId
+		const homeHex = '0x' + this.driverInfo?.homeid?.toString(16)
+		this.driverInfo.name = homeHex
+		this.driverInfo.controllerId = this._driver.controller.ownNodeId
+
+		// needs home hex to be set
+		await this.getStoreNodes()
+
 		for (const [, node] of this._driver.controller.nodes) {
 			// node added will not be triggered if the node is in cache
 			this._createNode(node.id)
@@ -4412,11 +4479,6 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 				this._onNodeReady(node)
 			}
 		}
-
-		this.driverInfo.homeid = this._driver.controller.homeId
-		const homeHex = '0x' + this.driverInfo?.homeid?.toString(16)
-		this.driverInfo.name = homeHex
-		this.driverInfo.controllerId = this._driver.controller.ownNodeId
 
 		this.emit('event', EventSource.DRIVER, 'driver ready', this.driverInfo)
 
@@ -4471,8 +4533,8 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 				sentFragments: progress.sentFragments,
 				totalFragments: progress.totalFragments,
 				progress: progress.progress,
-				currentFile: 1,
-				totalFiles: 1,
+				currentFile: node.firmwareUpdate?.currentFile ?? 1,
+				totalFiles: node.firmwareUpdate?.currentFile ?? 1,
 			}
 
 			// send at most 4msg per second
@@ -6137,6 +6199,9 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 					?.map((region) => ({
 						value: region,
 						text: getEnumMemberName(RFRegion, region),
+						disabled:
+							region === RFRegion.Unknown ||
+							region === RFRegion['Default (EU)'],
 					}))
 					.sort((a, b) => a.text.localeCompare(b.text)) ?? []
 		}
@@ -6144,7 +6209,11 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 
 	async updateControllerNodeProps(
 		node?: ZUINode,
-		props: Array<'powerlevel' | 'RFRegion'> = ['powerlevel', 'RFRegion'],
+		props: Array<'powerlevel' | 'RFRegion' | 'maxLongRangePowerlevel'> = [
+			'powerlevel',
+			'RFRegion',
+			'maxLongRangePowerlevel',
+		],
 	) {
 		node = node || this.nodes.get(this._driver.controller.ownNodeId)
 		if (props.includes('powerlevel')) {
@@ -6183,11 +6252,26 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 			}
 		}
 
+		if (props.includes('maxLongRangePowerlevel')) {
+			if (
+				this._driver.controller.isSerialAPISetupCommandSupported(
+					SerialAPISetupCommand.GetLongRangeMaximumTxPower,
+				)
+			) {
+				const limit =
+					await this._driver.controller.getMaxLongRangePowerlevel()
+				node.maxLongRangePowerlevel = limit
+			} else {
+				logger.info('LR powerlevel is not supported by controller')
+			}
+		}
+
 		this.emitNodeUpdate(node, {
 			powerlevel: node.powerlevel,
 			measured0dBm: node.measured0dBm,
 			RFRegion: node.RFRegion,
 			supportsLongRange: node.supportsLongRange,
+			maxLongRangePowerlevel: node.maxLongRangePowerlevel,
 		})
 	}
 
@@ -6690,7 +6774,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 	) {
 		const interval = setInterval(() => {
 			const totalFilesFragments = totalFiles * fragmentsPerFile
-			const progress = this.nodes.get(nodeId)?.firmwareUpdate || {
+			const progress = this.nodes.get(nodeId).firmwareUpdate ?? {
 				totalFiles,
 				currentFile: 1,
 				sentFragments: 0,

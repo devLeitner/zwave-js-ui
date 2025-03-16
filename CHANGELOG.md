@@ -1,5 +1,75 @@
 
 
+# [9.33.0](https://github.com/zwave-js/zwave-js-ui/compare/v9.32.0...v9.33.0) (2025-03-12)
+
+
+### Features
+
+* bump @zwave-js/server to 1.40.3 ([28c7b40](https://github.com/zwave-js/zwave-js-ui/commit/28c7b402024da145e2990bc105065d3fed37add5))
+* bump zwave-js@14.3.12 ([#4143](https://github.com/zwave-js/zwave-js-ui/issues/4143)) ([abdc4d1](https://github.com/zwave-js/zwave-js-ui/commit/abdc4d11f2afa0f93becf9b77e7894ca47de1cb1))
+
+# [9.32.0](https://github.com/zwave-js/zwave-js-ui/compare/v9.31.0...v9.32.0) (2025-03-10)
+
+
+### Features
+
+* bump zwave-js@14.3.11 ([#4141](https://github.com/zwave-js/zwave-js-ui/issues/4141)) ([ce645d9](https://github.com/zwave-js/zwave-js-ui/commit/ce645d9dc7cacc1c9bbd62e66b4ad057677cc501))
+* support changing max. LR powerlevel ([#4140](https://github.com/zwave-js/zwave-js-ui/issues/4140)) ([a95cc51](https://github.com/zwave-js/zwave-js-ui/commit/a95cc519c25a05ea721a4a8f8a097a513298150a))
+
+# [9.31.0](https://github.com/zwave-js/zwave-js-ui/compare/v9.30.1...v9.31.0) (2025-02-27)
+
+
+### Bug Fixes
+
+* **logger:** ensure maxFiles validation checks for valid format ([3d36c39](https://github.com/zwave-js/zwave-js-ui/commit/3d36c3915c814121376bb99c1d7bf43d1e062f69))
+* **ui:** pressing save on settings on initial load could lead to clear actual settings ([65d1362](https://github.com/zwave-js/zwave-js-ui/commit/65d136259ba6da688873e262e531b60bb56e7745)), closes [#4128](https://github.com/zwave-js/zwave-js-ui/issues/4128)
+* **ui:** sanitize search function to convert assignment to comparison in zniffer ([6a9b851](https://github.com/zwave-js/zwave-js-ui/commit/6a9b851ded4e22d437cc25d11260ecb6f5e52583)), closes [#4117](https://github.com/zwave-js/zwave-js-ui/issues/4117)
+* **ui:** sort filtered nodes by name ([ca07b5d](https://github.com/zwave-js/zwave-js-ui/commit/ca07b5d3b9bd7cfcd757261547c2421b960a59b2)), closes [#4114](https://github.com/zwave-js/zwave-js-ui/issues/4114)
+
+
+### Features
+
+* add restart button on topbar ([#4132](https://github.com/zwave-js/zwave-js-ui/issues/4132)) ([d5af88d](https://github.com/zwave-js/zwave-js-ui/commit/d5af88d3e4940fe8eddf07ee5200a3d2890933cd))
+* bump zwave-js@14.3.10 ([#4135](https://github.com/zwave-js/zwave-js-ui/issues/4135)) ([a208bac](https://github.com/zwave-js/zwave-js-ui/commit/a208bac5e0e4da44e396b0feccb5d9d147bb975d))
+* bump zwave-js@14.3.9 ([#4131](https://github.com/zwave-js/zwave-js-ui/issues/4131)) ([831172a](https://github.com/zwave-js/zwave-js-ui/commit/831172a17d1b725625d7bc4b443f3ff88170eb1d))
+* **ui:** show full date when hovering timestamp on zniffer ([#4118](https://github.com/zwave-js/zwave-js-ui/issues/4118)) ([4ebbbf8](https://github.com/zwave-js/zwave-js-ui/commit/4ebbbf8d99604aa7163aec674eecbf19ff9a4f13))
+
+## [9.30.1](https://github.com/zwave-js/zwave-js-ui/compare/v9.30.0...v9.30.1) (2025-01-28)
+
+
+### Features
+
+* bump zwave-js@14.3.8 ([#4108](https://github.com/zwave-js/zwave-js-ui/issues/4108)) ([8b8837e](https://github.com/zwave-js/zwave-js-ui/commit/8b8837ecb53a932b4f923e80219799dcb69473f5))
+
+# [9.30.0](https://github.com/zwave-js/zwave-js-ui/compare/v9.29.1...v9.30.0) (2025-01-27)
+
+
+### Bug Fixes
+
+* **logger:** standardize module name formatting to uppercase ([dfa47a9](https://github.com/zwave-js/zwave-js-ui/commit/dfa47a949101fe23c79aff9e0b02faaad11592aa))
+* store nodes preferences in `nodes.json` using homeHex ([#4104](https://github.com/zwave-js/zwave-js-ui/issues/4104)) ([e913f10](https://github.com/zwave-js/zwave-js-ui/commit/e913f10b0c1cb008de22148a07a5763e8633defa))
+* **ui:** abort link reliability check on dialog close ([54224d2](https://github.com/zwave-js/zwave-js-ui/commit/54224d21a080ed19d3a6c214d95db23f2a86e3fb)), closes [#4105](https://github.com/zwave-js/zwave-js-ui/issues/4105)
+* **ui:** cleaner popup text when refreshing associations ([abe7137](https://github.com/zwave-js/zwave-js-ui/commit/abe71370a31c31635144dff0b2731eea649842e6)), closes [#4100](https://github.com/zwave-js/zwave-js-ui/issues/4100)
+* **ui:** move rebuild routes back to general actions ([c5d9691](https://github.com/zwave-js/zwave-js-ui/commit/c5d96914ebf2aafed52f675288b7ee15693647d9)), closes [#3559](https://github.com/zwave-js/zwave-js-ui/issues/3559)
+* use `uncaughtException` to catch missing exceptions ([4905e0c](https://github.com/zwave-js/zwave-js-ui/commit/4905e0c2c64f8c7c60bf456cbae611ff16f99200)), closes [#4098](https://github.com/zwave-js/zwave-js-ui/issues/4098)
+
+
+### Features
+
+* bump @kvaster/zwavejs-prom plugin to 0.0.3 ([c373290](https://github.com/zwave-js/zwave-js-ui/commit/c373290a949122624307debe189d935af9de1acd)), closes [#4096](https://github.com/zwave-js/zwave-js-ui/issues/4096)
+* **mqtt-discovery:** gateway values setting to enable by default Configuration CC entities ([#4106](https://github.com/zwave-js/zwave-js-ui/issues/4106)) ([81ebd61](https://github.com/zwave-js/zwave-js-ui/commit/81ebd61d6204f707f4628512b05dfe953e0796ed))
+
+## [9.29.1](https://github.com/zwave-js/zwave-js-ui/compare/v9.29.0...v9.29.1) (2025-01-16)
+
+
+### Bug Fixes
+
+* do not allow to set `Unknown` and `Default (EU)` regions ([a9c8e3a](https://github.com/zwave-js/zwave-js-ui/commit/a9c8e3a3d14ebae3fc05bf7c9c290e1f627fdf0c))
+* **ui:** allow to call rebuild routes against multiple nodes at once ([848a543](https://github.com/zwave-js/zwave-js-ui/commit/848a54387b255600b0d81bcaa99a703784bf23b1)), closes [#3559](https://github.com/zwave-js/zwave-js-ui/issues/3559)
+* **ui:** editing Color Switch CC HEX color does not work ([ca030dc](https://github.com/zwave-js/zwave-js-ui/commit/ca030dceb3df16ce035cf46dbd17784d9a3dcc88)), closes [#4085](https://github.com/zwave-js/zwave-js-ui/issues/4085)
+* **ui:** set default iterations for link reliability check to 100 ([#4082](https://github.com/zwave-js/zwave-js-ui/issues/4082)) ([f99c28b](https://github.com/zwave-js/zwave-js-ui/commit/f99c28b3341fb1c050b83d8b6e210d9bf215cfc6))
+* **ui:** show rebuild node routes only when there are node selected ([ac1cbb3](https://github.com/zwave-js/zwave-js-ui/commit/ac1cbb30acac1dac563a136dd07368b2a6b2ab6a)), closes [#4087](https://github.com/zwave-js/zwave-js-ui/issues/4087)
+
 # [9.29.0](https://github.com/zwave-js/zwave-js-ui/compare/v9.28.0...v9.29.0) (2024-12-20)
 
 
