@@ -10,10 +10,10 @@ metadata:
 spec:
   tls:
   - hosts:
-    - zwave.leitnerserver.dev
+    - zwave.devleitner.com
     secretName: clusterissuer.letsencrypt.key.tls
   rules:
-    - host: zwave.leitnerserver.dev
+    - host: zwave.devleitner.com
       http:
         paths:
         - path: /
