@@ -11,28 +11,21 @@
 				}"
 			>
 				<v-row v-if="zniffer.enabled">
-					<v-col style="max-width: 220px; margin-top: 7px">
-						<v-btn-toggle dense multiple>
-							<v-tooltip
-								bottom
+					<v-col style="max-width: 280px; margin-top: 7px">
+						<v-btn-group density="compact" multiple>
+							<v-btn
+								size="small"
 								v-for="button in buttons"
-								:key="button.label"
-								:target="`#${button.id}`"
+								:key="button.id"
+								:id="button.id"
+								:color="button.disabled ? 'grey' : button.color"
+								:disabled="button.disabled"
+								@click="button.action"
+								v-tooltip:bottom="button.tooltip"
 							>
-								<template v-slot:activator="{ on }">
-									<v-btn
-										:id="button.id"
-										:color="button.color"
-										:disabled="button.disabled"
-										@click="button.action"
-										v-on="on"
-									>
-										<v-icon>{{ button.icon }}</v-icon>
-									</v-btn>
-								</template>
-								<span>{{ button.tooltip }}</span>
-							</v-tooltip>
-						</v-btn-toggle>
+								<v-icon>{{ button.icon }}</v-icon>
+							</v-btn>
+						</v-btn-group>
 					</v-col>
 					<v-col
 						ref="settingCol"
@@ -50,17 +43,20 @@
 							:error-messages="
 								searchError ? ['Invalid search'] : []
 							"
-							outlined
-							dense
+							variant="outlined"
+							density="compact"
 							single-line
 							class="ma-2"
 							prepend-inner-icon="search"
 							label="Search"
 						>
-							<template v-slot:append>
-								<v-menu offset-y>
-									<template v-slot:activator="{ on }">
-										<v-icon v-on="on" color="grey" size="20"
+							<template #append>
+								<v-menu location="bottom">
+									<template #activator="{ props }">
+										<v-icon
+											v-bind="props"
+											color="grey"
+											size="20"
 											>info</v-icon
 										>
 									</template>
@@ -116,14 +112,10 @@
 										</v-card-text>
 									</v-card>
 								</v-menu>
-							</template>
-							<!-- add to append-outer slot the total numer of frames -->
-
-							<template v-slot:append-outer>
 								<v-col
-									style="margin-top: -7px"
 									v-if="totalFrames"
-									class="pa-0 caption grey--text text-center"
+									style="margin-top: -7px"
+									class="pa-0 ml-3 text-caption text-grey text-center"
 								>
 									<p class="mb-0">Frames</p>
 									<p class="mb-0">
@@ -133,6 +125,7 @@
 									</p>
 								</v-col>
 							</template>
+							<!-- add to append slot the total numer of frames -->
 						</v-text-field>
 					</v-col>
 
@@ -141,11 +134,11 @@
 							v-intersect.once="bindScroll"
 							:headers="headers"
 							:items="framesLimited"
-							:item-style="getRowStyle"
+							:row-props="getRowStyle"
 							@click:row="onRowClick"
-							single-select
+							show-select
 							fixed-header
-							dense
+							density="compact"
 							:height="topPaneHeight - offsetTop"
 							id="framesTable"
 							ref="framesTable"
@@ -153,32 +146,27 @@
 							disable-pagination
 							:mobile-breakpoint="-1"
 						>
-							<template v-slot:[`item.timestamp`]="{ item }">
-								<v-tooltip bottom>
-									<template v-slot:activator="{ on }">
-										<span v-on="on">{{
-											getTimestamp(item.timestamp)
-										}}</span>
-									</template>
-									<span>{{
+							<template #[`item.timestamp`]="{ item }">
+								<span
+									v-tooltip:bottom="
 										new Date(
 											item.timestamp,
 										).toLocaleDateString()
-									}}</span>
-								</v-tooltip>
+									"
+								>
+									{{ getTimestamp(item.timestamp) }}
+								</span>
 							</template>
 
-							<template v-slot:[`item.channel`]="{ item }">
+							<template #[`item.channel`]="{ item }">
 								{{ item.channel }}
 							</template>
 
-							<template v-slot:[`item.rssi`]="{ item }">
+							<template #[`item.rssi`]="{ item }">
 								{{ getRssi(item) }}
 							</template>
 
-							<template
-								v-slot:[`item.protocolDataRate`]="{ item }"
-							>
+							<template #[`item.protocolDataRate`]="{ item }">
 								<span v-if="item.corrupted"></span>
 								<div v-else class="d-flex text-center">
 									<rich-value
@@ -193,21 +181,21 @@
 								</div>
 							</template>
 
-							<template v-slot:[`item.type`]="{ item }">
+							<template #[`item.type`]="{ item }">
 								<span>
 									{{ getType(item) }}
 								</span>
 							</template>
 
-							<template v-slot:[`item.sourceNodeId`]="{ item }">
+							<template #[`item.sourceNodeId`]="{ item }">
 								<span v-html="getRoute(item)"></span>
 							</template>
 
-							<template v-slot:[`item.homeId`]="{ item }">
+							<template #[`item.homeId`]="{ item }">
 								{{ item.homeId?.toString(16) }}
 							</template>
 
-							<template v-slot:[`item.payload`]="{ item }">
+							<template #[`item.payload`]="{ item }">
 								<code v-if="item.corrupted"> CRC Error </code>
 								<span v-else-if="item.parsedPayload">
 									{{ getPayloadTags(item.parsedPayload) }}
@@ -223,7 +211,7 @@
 								<span v-else>---</span>
 							</template>
 
-							<template v-if="start > 0" v-slot:[`body.prepend`]>
+							<template v-if="start > 0" #[`body.prepend`]>
 								<tr>
 									<td
 										:colspan="headers.length"
@@ -240,7 +228,7 @@
 							</template>
 							<template
 								v-if="start + perPage <= totalFrames"
-								v-slot:[`body.append`]
+								#[`body.append`]
 							>
 								<tr>
 									<td
@@ -256,26 +244,20 @@
 							</template>
 						</v-data-table>
 
-						<v-tooltip v-if="!autoScroll" left>
-							<template v-slot:activator="{ on }">
-								<v-btn
-									color="purple"
-									@click="enableAutoScroll()"
-									dark
-									small
-									fab
-									hover
-									top
-									absolute
-									right
-									style="top: 40px"
-									v-on="on"
-								>
-									<v-icon>vertical_align_bottom</v-icon>
-								</v-btn>
-							</template>
-							<span>Enable autoscroll</span>
-						</v-tooltip>
+						<v-fab
+							v-if="!autoScroll"
+							color="purple"
+							@click="enableAutoScroll()"
+							size="small"
+							hover
+							icon
+							location="top right"
+							absolute
+							style="top: 40px"
+							v-tooltip:bottom="'Enable autoscroll'"
+						>
+							<v-icon>vertical_align_bottom</v-icon>
+						</v-fab>
 					</v-col>
 				</v-row>
 				<v-row v-else>
@@ -289,7 +271,9 @@
 					</v-col>
 				</v-row>
 			</div>
-			<multipane-resizer :class="$vuetify.theme.dark ? 'dark' : ''" />
+			<multipane-resizer
+				:class="$vuetify.theme.current.dark ? 'dark' : ''"
+			/>
 			<div
 				class="pane pa-2"
 				style="flex-grow: 1; overflow-y: scroll; overflow-x: hidden"
@@ -297,33 +281,37 @@
 					height: `calc(100vh - ${topPaneHeight + 110}px)`,
 				}"
 			>
-				<frame-details class="my-1" :value="selectedFrame" />
+				<frame-details class="my-1" :modelValue="selectedFrame" />
 			</div>
 		</multipane>
 
-		<v-btn
+		<v-fab
 			color="primary"
 			@click="drawer = !drawer"
-			dark
-			fab
 			hover
-			bottom
-			right
-			fixed
+			app
+			icon
+			size="large"
+			location="bottom right"
 		>
 			<v-icon v-if="drawer">close</v-icon>
 			<v-icon v-else>menu</v-icon>
-		</v-btn>
+		</v-fab>
 
-		<v-navigation-drawer v-model="drawer" absolute right style="z-index: 2">
+		<v-navigation-drawer
+			v-model="drawer"
+			absolute
+			location="right"
+			style="z-index: 2"
+		>
 			<v-card class="fill">
 				<v-card-title> Settings </v-card-title>
 				<v-card-text>
 					<v-row>
 						<v-col v-if="!isPopup" cols="12">
 							<v-btn
-								text
-								small
+								variant="text"
+								size="small"
 								color="primary"
 								@click="openInWindow('Zniffer', 800, 1500)"
 							>
@@ -336,16 +324,37 @@
 								hide-details
 								:items="znifferRegions"
 								v-model="frequency"
-								@change="setFrequency"
+								@update:model-value="setFrequency"
 							>
-								<template v-slot:prepend>
+								<template #prepend>
 									<v-icon>signal_cellular_alt</v-icon>
 								</template>
 
-								<template v-slot:append-outer>
+								<template #append>
 									<v-icon
 										color="success"
 										v-if="frequencySuccess"
+										>check_circle</v-icon
+									>
+								</template>
+							</v-select>
+						</v-col>
+						<v-col cols="12" v-if="lrChannelConfigAvailable">
+							<v-select
+								label="LR Channel Configuration"
+								hide-details
+								:items="znifferLRChannelConfigs"
+								v-model="lrChannelConfig"
+								@update:model-value="setLRChannelConfig"
+							>
+								<template #prepend>
+									<v-icon>wifi_channel</v-icon>
+								</template>
+
+								<template #append>
+									<v-icon
+										color="success"
+										v-if="lrChannelConfigSuccess"
 										>check_circle</v-icon
 									>
 								</template>
@@ -358,14 +367,18 @@
 	</v-container>
 </template>
 <script>
-import { ZWaveFrameType, LongRangeFrameType } from 'zwave-js/safe'
-import { Protocols } from '@zwave-js/core/safe'
-import { socketEvents } from '@server/lib/SocketEvents'
+import { defineAsyncComponent, nextTick } from 'vue'
+import { ZWaveFrameType, LongRangeFrameType } from 'zwave-js'
+import { Protocols, RFRegion } from '@zwave-js/core'
 
-import { mapState, mapActions } from 'pinia'
+import { mapState } from 'pinia'
 import useBaseStore from '../stores/base.js'
 import { inboundEvents as socketActions } from '@server/lib/SocketEvents'
-import { znifferRegions } from '../lib/items.js'
+import InstancesMixin from '../mixins/InstancesMixin.js'
+import {
+	znifferRegions as defaultZnifferRegions,
+	znifferLRChannelConfigs as defaultZnifferLRChannelConfigs,
+} from '../lib/items.js'
 import {
 	getRoute,
 	getType,
@@ -376,21 +389,33 @@ import {
 	getProtocolIcon,
 	isPopupWindow,
 } from '../lib/utils'
+import { instances, manager } from '../lib/instanceManager.js'
 
 export default {
 	name: 'Zniffer',
+	mixins: [InstancesMixin],
 	props: {
 		socket: Object,
 	},
 	components: {
-		Multipane: () => import('../components/custom/Multipane.vue'),
-		MultipaneResizer: () =>
-			import('../components/custom/MultipaneResizer.vue'),
-		RichValue: () => import('@/components/nodes-table/RichValue.vue'),
-		FrameDetails: () => import('../components//custom/FrameDetails.vue'),
+		Multipane: defineAsyncComponent(
+			() => import('../components/custom/Multipane.vue'),
+		),
+		MultipaneResizer: defineAsyncComponent(
+			() => import('../components/custom/MultipaneResizer.vue'),
+		),
+		RichValue: defineAsyncComponent(
+			() => import('@/components/nodes-table/RichValue.vue'),
+		),
+		FrameDetails: defineAsyncComponent(
+			() => import('../components//custom/FrameDetails.vue'),
+		),
 	},
 	computed: {
 		...mapState(useBaseStore, ['zniffer', 'znifferState']),
+		app() {
+			return manager.getInstance(instances.APP)
+		},
 		buttons() {
 			return [
 				{
@@ -399,7 +424,7 @@ export default {
 					color: 'success',
 					tooltip: 'Start Zniffer',
 					action: this.startZniffer,
-					disabled: this.znifferState?.started,
+					disabled: this.viewState === 'recording',
 				},
 				{
 					id: 'stop',
@@ -407,7 +432,7 @@ export default {
 					color: 'error',
 					tooltip: 'Stop Zniffer',
 					action: this.stopZniffer,
-					disabled: !this.znifferState?.started,
+					disabled: this.viewState !== 'recording',
 				},
 				{
 					id: 'clear',
@@ -415,7 +440,16 @@ export default {
 					color: 'warning',
 					tooltip: 'Clear Zniffer',
 					action: this.clearFrames,
-					disabled: !this.frames.length,
+					disabled:
+						this.frames.length === 0 || this.viewState === 'loaded',
+				},
+				{
+					id: 'load',
+					icon: 'folder_open',
+					color: 'info',
+					tooltip: 'Load capture from file',
+					action: this.loadCapture,
+					disabled: this.viewState === 'recording',
 				},
 				{
 					id: 'save',
@@ -423,7 +457,8 @@ export default {
 					color: 'primary',
 					tooltip: 'Save capture',
 					action: this.createCapture,
-					disabled: !this.frames.length,
+					disabled:
+						this.frames.length === 0 || this.viewState === 'loaded',
 				},
 			]
 		},
@@ -449,7 +484,13 @@ export default {
 			this.resizeScrollWrapper()
 		},
 		znifferState() {
-			this.clearFrequency()
+			this.clearZnifferConfiguration()
+			// Sync the view state with the zniffer state
+			if (this.znifferState?.started && this.viewState !== 'recording') {
+				this.viewState = 'recording'
+			} else if (this.viewState === 'recording') {
+				this.viewState = 'stopped'
+			}
 		},
 		frequencySuccess(v) {
 			if (v) {
@@ -458,15 +499,25 @@ export default {
 				}, 3000)
 			}
 		},
-		framesQueue() {
-			// used to improve performances when lot of frames comes all together
-			if (this.queueTimeout) {
-				clearTimeout(this.queueTimeout)
+		lrChannelConfigSuccess(v) {
+			if (v) {
+				setTimeout(() => {
+					this.lrChannelConfigSuccess = false
+				}, 3000)
 			}
+		},
+		framesQueue: {
+			deep: 1,
+			handler() {
+				// used to improve performances when lot of frames comes all together
+				if (this.queueTimeout) {
+					clearTimeout(this.queueTimeout)
+				}
 
-			this.queueTimeout = setTimeout(() => {
-				this.emptyQueue()
-			}, 50)
+				this.queueTimeout = setTimeout(() => {
+					this.emptyQueue()
+				}, 50)
+			},
 		},
 		search(v) {
 			if (this.searchTimeout) {
@@ -477,13 +528,28 @@ export default {
 				this.filterFrames(v)
 			}, 300)
 		},
-		frames() {
-			this.filterFrames(this.search)
-			this.scrollBottom()
+		frames: {
+			deep: 1,
+			handler() {
+				this.filterFrames(this.search)
+				this.scrollBottom()
+
+				if (this.viewState === 'initial' && this.frames.length > 0) {
+					// If we were in initial state and suddenly have frames,
+					// the Zniffer might be active
+					if (this.znifferState?.started) {
+						this.viewState = 'recording'
+					} else {
+						this.viewState = 'stopped'
+					}
+				}
+			},
 		},
 	},
 	mounted() {
-		this.socket.on(socketEvents.znifferFrame, this.addFrame)
+		this.subscribeChannels(['znifferFrames'])
+
+		this.bindEvent('znifferFrame', this.addFrame)
 
 		this.onWindowResize = () => {
 			this.topPaneHeight = window.innerHeight / 2
@@ -498,9 +564,10 @@ export default {
 		window.addEventListener('resize', this.onWindowResize)
 
 		this.onWindowResize()
-		this.clearFrequency()
+		this.clearZnifferConfiguration()
+		this.initializeViewState()
 	},
-	beforeDestroy() {
+	beforeUnmount() {
 		window.removeEventListener('resize', this.onWindowResize)
 
 		if (this.roTopPane) {
@@ -509,8 +576,7 @@ export default {
 		}
 
 		if (this.socket) {
-			// unbind events
-			this.socket.off(socketEvents.znifferFrame)
+			this.unbindEvents()
 			this.socket.off('connect', this.onConnnect)
 		}
 
@@ -524,20 +590,26 @@ export default {
 	},
 	data() {
 		return {
-			znifferRegions,
+			znifferRegions: defaultZnifferRegions,
+			znifferLRChannelConfigs: defaultZnifferLRChannelConfigs,
 			isPopup: isPopupWindow(),
 			fab: false,
 			drawer: false,
 			frequency: null,
 			frequencySuccess: false,
+			lrRegions: [],
+			lrChannelConfigAvailable: false,
+			lrChannelConfig: null,
+			lrChannelConfigSuccess: false,
 			start: 0,
 			offsetTop: 125,
 			search: '',
 			searchError: false,
+			viewState: 'initial', // 'initial', 'recording', 'stopped', 'loaded'
 			busy: false,
 			selectedFrame: null,
 			scrollWrapper: null,
-			rowHeight: 32,
+			rowHeight: 41,
 			perPage: 22,
 			topPaneHeight: 500,
 			frames: [],
@@ -545,63 +617,63 @@ export default {
 			framesQueue: [],
 			headers: [
 				{
-					text: '#',
-					value: 'id',
+					title: '#',
+					key: 'id',
 					width: '10ch',
 					sortable: false,
 				},
 				{
-					text: 'Timestamp',
-					value: 'timestamp',
+					title: 'Timestamp',
+					key: 'timestamp',
 					width: '12ch',
 					sortable: false,
 					class: 'no-wrap',
 				},
 				{
-					text: 'Delta [ms]',
-					value: 'delta',
+					title: 'Delta [ms]',
+					key: 'delta',
 					width: '4ch',
 					sortable: false,
 				},
 				{
-					text: 'Protocol Data Rate',
-					value: 'protocolDataRate',
+					title: 'Protocol Data Rate',
+					key: 'protocolDataRate',
 					width: '20ch',
 					sortable: false,
 				},
 				{
-					text: 'RSSI',
-					value: 'rssi',
+					title: 'RSSI',
+					key: 'rssi',
 					width: '4ch',
 					sortable: false,
 				},
 				{
-					text: 'Ch',
-					value: 'channel',
+					title: 'Ch',
+					key: 'channel',
 					width: '4ch',
 					sortable: false,
 				},
 				{
-					text: 'Home Id',
-					value: 'homeId',
+					title: 'Home Id',
+					key: 'homeId',
 					width: '8ch',
 					sortable: false,
 					class: 'no-wrap',
 				},
 				{
-					text: 'Type',
+					title: 'Type',
 					width: '8ch',
-					value: 'type',
+					key: 'type',
 					sortable: false,
 				},
 				{
-					text: 'Route',
-					value: 'sourceNodeId',
+					title: 'Route',
+					key: 'sourceNodeId',
 					sortable: false,
 				},
 				{
-					text: 'Payload',
-					value: 'payload',
+					title: 'Payload',
+					key: 'payload',
 					sortable: false,
 				},
 			],
@@ -609,18 +681,36 @@ export default {
 		}
 	},
 	methods: {
-		...mapActions(useBaseStore, ['showSnackbar']),
-		getProtocolIcon,
 		openInWindow,
 		humanFriendlyNumber,
+		initializeViewState() {
+			// Verify that the initial view state is set correctly
+			if (this.znifferState?.started) {
+				this.viewState = 'recording'
+			} else if (this.frames.length > 0) {
+				this.viewState = 'stopped'
+			} else {
+				this.viewState = 'initial'
+			}
+		},
+		getProtocolIcon(protocol) {
+			return getProtocolIcon(protocol, this.app.currentTheme)
+		},
 		emptyQueue() {
 			if (this.framesQueue.length > 0) {
 				this.frames.push(...this.framesQueue)
 				this.framesQueue = []
 			}
 		},
-		onConnnect() {
-			this.getFrames()
+		async onConnnect() {
+			await this.getFrames()
+
+			// Try to restore the correct initial state
+			if (this.viewState === 'initial' && this.frames.length > 0) {
+				this.viewState = this.znifferState?.started
+					? 'recording'
+					: 'stopped'
+			}
 		},
 		addFrame(data) {
 			const lastFrame =
@@ -632,13 +722,50 @@ export default {
 			data.delta = lastFrame ? data.timestamp - lastFrame.timestamp : 0
 			this.framesQueue.push(data)
 		},
-		async clearFrequency() {
+		async clearZnifferConfiguration() {
 			// needed to handle the clear event on select
-			await this.$nextTick()
-			this.frequency = this.znifferState?.frequency ?? null
+			await nextTick()
+
+			if (this.znifferState) {
+				this.znifferRegions = Object.entries(
+					this.znifferState.supportedFrequencies,
+				)
+					.map(([key, value]) => {
+						const region = parseInt(key, 10)
+						return {
+							title: value,
+							value: region,
+							disabled:
+								region === RFRegion.Unknown ||
+								region === RFRegion['Default (EU)'],
+						}
+					})
+					.sort((a, b) => a.title?.localeCompare(b.title))
+				this.frequency = this.znifferState.frequency
+				this.lrRegions = this.znifferState.lrRegions
+				this.znifferLRChannelConfigs = Object.entries(
+					this.znifferState.supportedLRChannelConfigs,
+				).map(([key, value]) => {
+					return {
+						title: value,
+						value: parseInt(key, 10),
+					}
+				})
+				this.lrChannelConfig = this.znifferState.lrChannelConfig
+				this.lrChannelConfigAvailable = this.lrRegions.includes(
+					this.frequency,
+				)
+			} else {
+				this.znifferRegions = defaultZnifferRegions
+				this.frequency = null
+				this.lrRegions = []
+				this.znifferLRChannelConfigs = defaultZnifferLRChannelConfigs
+				this.lrChannelConfig = null
+				this.lrChannelConfigAvailable = false
+			}
 		},
 		onTopColResize() {
-			this.offsetTop = this.$refs.settingCol.clientHeight + 20
+			this.offsetTop = this.$refs.settingCol.$el.clientHeight + 20
 			this.resizeScrollWrapper()
 		},
 		resizeScrollWrapper() {
@@ -682,18 +809,20 @@ export default {
 				this.searchError = true
 			}
 		},
-		onRowClick(frame, { select, isSelected }) {
-			if (isSelected) {
+		onRowClick(
+			event,
+			{ item, toggleSelect, internalItem, index, isSelected },
+		) {
+			if (isSelected(item)) {
 				this.selectedFrame = null
 				this.autoScroll = true
-				select(false)
 			} else {
-				this.selectedFrame = frame
+				this.selectedFrame = item
 				this.autoScroll = false
-				select(true)
 			}
+			toggleSelect(internalItem, index, event)
 		},
-		getRowStyle(frame) {
+		getRowStyle({ item: frame }) {
 			const style = {
 				backgroundColor: '',
 			}
@@ -756,7 +885,7 @@ export default {
 				}
 			}
 
-			return style
+			return { style }
 		},
 		getPayloadTags(payload, prev = []) {
 			const tags = [
@@ -785,10 +914,10 @@ export default {
 			const el = this.$refs.framesTable?.$el
 
 			if (el) {
-				const wrapper = el.getElementsByClassName(
-					'v-data-table__wrapper',
-				)[0]
-				wrapper.addEventListener('scroll', this.onScroll.bind(this))
+				const wrapper = el.querySelector('.v-table__wrapper')
+				wrapper.addEventListener('scroll', this.onScroll.bind(this), {
+					passive: true,
+				})
 				this.scrollWrapper = wrapper
 			}
 		},
@@ -897,12 +1026,36 @@ export default {
 				this.frequencySuccess = true
 			}
 		},
+		async setLRChannelConfig() {
+			const response = await this.sendAction(
+				{
+					apiName: 'setLRChannelConfig',
+					channelConfig: this.lrChannelConfig,
+				},
+				{ hideInfo: true },
+			)
+
+			if (response.success) {
+				this.lrChannelConfigSuccess = true
+			}
+		},
 		async startZniffer() {
+			// If in loaded state, confirm discarding current trace
+			if (this.viewState === 'loaded' && this.frames.length > 0) {
+				const confirmed = await this.app.confirm(
+					'Discard loaded trace',
+					'Are you sure you want to discard the currently loaded trace?',
+					'warning',
+				)
+				if (!confirmed) return
+			}
+
 			const response = await this.sendAction({
 				apiName: 'start',
 			})
 
 			if (response.success) {
+				this.viewState = 'recording'
 				this.showSnackbar(`Zniffer started`, 'success')
 			}
 		},
@@ -912,6 +1065,7 @@ export default {
 			})
 
 			if (response.success) {
+				this.viewState = 'stopped'
 				this.showSnackbar(`Zniffer stopped`, 'success')
 			}
 		},
@@ -924,6 +1078,13 @@ export default {
 				this.showSnackbar(`Zniffer cleared`, 'success')
 				this.frames = []
 				this.framesFiltered = []
+				// If currently in stopped or loaded state, go to initial state
+				if (
+					this.viewState === 'stopped' ||
+					this.viewState === 'loaded'
+				) {
+					this.viewState = 'initial'
+				}
 			}
 		},
 		async createCapture() {
@@ -937,6 +1098,62 @@ export default {
 					`Capture "${result.name}" created in store`,
 					'success',
 				)
+				// Trigger download of the Zniffer capture
+				const fileName = result.name.replace('.zlf', '')
+				this.app.exportConfiguration(result.data, fileName, 'zlf')
+			}
+		},
+		async loadCapture() {
+			try {
+				// State-based confirmation logic
+				if (this.frames.length > 0) {
+					if (this.viewState === 'recording') {
+						const confirmed = await this.app.confirm(
+							'Stop recording',
+							'Are you sure you want to stop recording and discard the recorded frames?',
+							'warning',
+						)
+						if (!confirmed) return
+						// Stop recording first
+						await this.stopZniffer()
+					} else if (this.viewState === 'stopped') {
+						const confirmed = await this.app.confirm(
+							'Discard recorded frames',
+							'Are you sure you want to discard the recorded frames?',
+							'warning',
+						)
+						if (!confirmed) return
+					}
+				}
+
+				const { data: buffer } = await this.app.importFile('buffer')
+
+				if (!buffer) return // User cancelled file selection
+
+				const response = await this.sendAction(
+					{
+						apiName: 'loadCaptureFromBuffer',
+						buffer: Array.from(new Uint8Array(buffer)),
+					},
+					{
+						hideInfo: true,
+					},
+				)
+
+				if (response.success) {
+					// Refresh frames to show loaded data
+					this.viewState = 'loaded'
+					await this.getFrames()
+				} else {
+					throw new Error(
+						response.message || 'Failed to load capture',
+					)
+				}
+			} catch (error) {
+				this.showSnackbar(
+					`Error loading capture: ${error.message}`,
+					'error',
+				)
 			}
 		},
 	},
@@ -944,7 +1161,7 @@ export default {
 </script>
 
 <style scoped>
-#framesTable::v-deep td {
+#framesTable :deep(td) {
 	white-space: nowrap;
 	/* display: -webkit-box;
 	-webkit-line-clamp: 3;
@@ -953,7 +1170,7 @@ export default {
 }
 
 .pane::-webkit-scrollbar,
-#framesTable::v-deep .v-data-table__wrapper::-webkit-scrollbar {
+#framesTable :deep(.v-table__wrapper::-webkit-scrollbar) {
 	height: 5px;
 	width: 8px;
 	background: rgba(0, 0, 0, 0.233);
@@ -961,8 +1178,8 @@ export default {
 }
 
 .pane::-webkit-scrollbar-thumb,
-#framesTable::v-deep .v-data-table__wrapper::-webkit-scrollbar-thumb {
-	background: var(--v-primary-base);
+#framesTable :deep(.v-table__wrapper::-webkit-scrollbar-thumb) {
+	background: v-bind('$vuetify.theme.current.colors.primary');
 	border-radius: 1ex;
 	-webkit-border-radius: 1ex;
 }

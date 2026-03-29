@@ -1,89 +1,69 @@
-// eslint-disable-next-line one-var
-import {
-	CommandClasses,
+import type {
+	AllowedValue,
 	ConfigurationMetadata,
-	dskToString,
-	Duration,
 	Firmware,
-	isUnsupervisedOrSucceeded,
 	Route,
-	RouteKind,
-	SecurityClass,
 	SupervisionResult,
-	SupervisionStatus,
 	ValueMetadataNumeric,
 	ValueMetadataString,
 	ZWaveDataRate,
+	FirmwareFileFormat,
+} from '@zwave-js/core'
+import {
+	CommandClasses,
+	dskToString,
+	Duration,
+	isUnsupervisedOrSucceeded,
+	RouteKind,
+	SecurityClass,
+	SupervisionStatus,
 	ZWaveErrorCodes,
 	Protocols,
-	createDefaultTransportFormat,
-	FirmwareFileFormat,
 	tryUnzipFirmwareFile,
-	extractFirmwareAsync,
+	extractFirmware,
 } from '@zwave-js/core'
+import { createDefaultTransportFormat } from '@zwave-js/core/bindings/log/node'
+import { applyExternalDriverSettings } from './externalSettings.ts'
 import { JSONTransport } from '@zwave-js/log-transport-json'
-import { isDocker } from '@zwave-js/shared'
-import {
+import type {
 	AssociationAddress,
 	AssociationGroup,
-	ControllerFirmwareUpdateProgress,
-	ControllerFirmwareUpdateResult,
-	ControllerFirmwareUpdateStatus,
+	OTWFirmwareUpdateProgress,
+	OTWFirmwareUpdateResult,
 	ControllerStatistics,
-	ControllerStatus,
 	DataRate,
-	Driver,
 	ExclusionOptions,
-	ExclusionStrategy,
 	FirmwareUpdateCapabilities,
 	FirmwareUpdateProgress,
 	FirmwareUpdateResult,
-	FirmwareUpdateStatus,
 	FLiRS,
 	FoundNode,
 	GetFirmwareUpdatesOptions,
-	guessFirmwareFileFormat,
 	RebuildRoutesOptions,
 	RebuildRoutesStatus,
 	InclusionGrant,
 	InclusionOptions,
 	InclusionResult,
-	InclusionStrategy,
-	InterviewStage,
-	libVersion,
 	LifelineHealthCheckResult,
 	LifelineHealthCheckSummary,
-	MultilevelSwitchCommand,
 	NodeInterviewFailedEventArgs,
 	NodeStatistics,
-	NodeStatus,
 	NodeType,
 	PlannedProvisioningEntry,
 	ProtocolVersion,
-	QRCodeVersion,
 	QRProvisioningInformation,
 	RefreshInfoOptions,
-	RemoveNodeReason,
 	ReplaceNodeOptions,
-	RFRegion,
 	RouteHealthCheckResult,
 	RouteHealthCheckSummary,
-	ScheduleEntryLockCC,
 	ScheduleEntryLockDailyRepeatingSchedule,
-	ScheduleEntryLockScheduleKind,
 	ScheduleEntryLockSlotId,
 	ScheduleEntryLockWeekDaySchedule,
 	ScheduleEntryLockYearDaySchedule,
-	SerialAPISetupCommand,
 	SetValueAPIOptions,
-	setValueFailed,
 	SetValueResult,
-	SetValueStatus,
-	setValueWasUnsupervisedOrSucceeded,
 	SmartStartProvisioningEntry,
 	TranslatedValueID,
-	UserCodeCC,
-	UserIDStatus,
 	ValueID,
 	ValueMetadata,
 	ValueType,
@@ -105,38 +85,73 @@ import {
 	PartialZWaveOptions,
 	InclusionUserCallbacks,
 	InclusionState,
+	LinkReliabilityCheckResult,
+	JoinNetworkOptions,
+	JoinNetworkResult,
+} from 'zwave-js'
+import {
+	OTWFirmwareUpdateStatus,
+	ControllerStatus,
+	Driver,
+	ExclusionStrategy,
+	FirmwareUpdateStatus,
+	guessFirmwareFileFormat,
+	InclusionStrategy,
+	InterviewStage,
+	libVersion,
+	MultilevelSwitchCommand,
+	NodeStatus,
+	QRCodeVersion,
+	RemoveNodeReason,
+	RFRegion,
+	ScheduleEntryLockCC,
+	ScheduleEntryLockScheduleKind,
+	SerialAPISetupCommand,
+	setValueFailed,
+	SetValueStatus,
+	setValueWasUnsupervisedOrSucceeded,
+	UserCodeCC,
+	UserIDStatus,
 	ProvisioningEntryStatus,
 	AssociationCheckResult,
-	LinkReliabilityCheckResult,
+	JoinNetworkStrategy,
+	DriverMode,
+	BatteryReplacementStatus,
 } from 'zwave-js'
 import { getEnumMemberName, parseQRCodeString } from 'zwave-js/Utils'
-import { configDbDir, logsDir, nvmBackupsDir, storeDir } from '../config/app'
-import store from '../config/store'
-import jsonStore from './jsonStore'
-import * as LogManager from './logger'
-import * as utils from './utils'
+import { configDbDir, nvmBackupsDir, storeDir } from '../config/app.ts'
+import store from '../config/store.ts'
+import jsonStore from './jsonStore.ts'
+import * as LogManager from './logger.ts'
+import * as utils from './utils.ts'
 
 import { serverVersion, ZwavejsServer } from '@zwave-js/server'
-import { ensureDir, exists, mkdirp, writeFile } from 'fs-extra'
-import { Server as SocketServer } from 'socket.io'
-import { TypedEventEmitter } from './EventEmitter'
-import { GatewayValue } from './Gateway'
+import type { Server as SocketServer } from 'socket.io'
+import { TypedEventEmitter } from './EventEmitter.ts'
+import type { GatewayValue } from './Gateway.ts'
 
-import { ConfigManager, DeviceConfig } from '@zwave-js/config'
-import { readFile } from 'fs/promises'
-import backupManager, { NVM_BACKUP_PREFIX } from './BackupManager'
-import { socketEvents } from './SocketEvents'
-import { isUint8Array } from 'util/types'
-
-export const deviceConfigPriorityDir = storeDir + '/config'
+import type { DeviceConfig } from '@zwave-js/config'
+import { ConfigManager } from '@zwave-js/config'
+import { createHash } from 'node:crypto'
+import { readFile, writeFile } from 'node:fs/promises'
+import backupManager, { NVM_BACKUP_PREFIX } from './BackupManager.ts'
+import { eventToChannel, socketEvents } from './SocketEvents.ts'
+import { isUint8Array } from 'node:util/types'
+import {
+	coerce as semverCoerce,
+	gte as semverGte,
+	lte as semverLte,
+} from 'semver'
+import { PkgFsBindings } from './PkgFsBindings.ts'
+import { regionSupportsAutoPowerlevel } from './shared.ts'
+import { deviceConfigPriorityDir } from './Constants.ts'
+import { createRequire } from 'node:module'
 
 export const configManager = new ConfigManager({
 	deviceConfigPriorityDir,
 })
 
 const logger = LogManager.module('Z-Wave')
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const loglevels = require('triple-beam').configs.npm.levels
 
 const NEIGHBORS_LOCK_REFRESH = 60 * 1000
 
@@ -209,6 +224,10 @@ export const allowedApis = validateMethods([
 	'abortFirmwareUpdate',
 	'dumpNode',
 	'getAvailableFirmwareUpdates',
+	'getAllAvailableFirmwareUpdates',
+	'checkAllNodesFirmwareUpdates',
+	'dismissFirmwareUpdate',
+	'getNodeFirmwareUpdates',
 	'firmwareUpdateOTA',
 	'sendCommand',
 	'writeValue',
@@ -218,6 +237,8 @@ export const allowedApis = validateMethods([
 	'checkForConfigUpdates',
 	'installConfigUpdate',
 	'shutdownZwaveAPI',
+	'startLearnMode',
+	'stopLearnMode',
 	'pingNode',
 	'restart',
 	'grantSecurityClasses',
@@ -241,6 +262,13 @@ export const allowedApis = validateMethods([
 	'cancelGetSchedule',
 	'setSchedule',
 	'setEnabledSchedule',
+	'getConfigurationTemplates',
+	'createConfigurationTemplate',
+	'updateConfigurationTemplate',
+	'deleteConfigurationTemplate',
+	'applyConfigurationTemplate',
+	'importConfigurationTemplates',
+	'getDeviceConfigurationParams',
 ] as const)
 
 export type ZwaveNodeEvents = ZWaveNodeEvents | 'statistics updated'
@@ -329,8 +357,6 @@ export type SensorTypeScale = {
 
 export type AllowedApis = (typeof allowedApis)[number]
 
-const ZWAVEJS_LOG_FILE = utils.joinPath(logsDir, 'zwavejs_%DATE%.log')
-
 export type ZUIValueIdState = {
 	text: string
 	value: number | string | boolean
@@ -364,6 +390,7 @@ export type ZUIValueId = {
 	min?: number
 	max?: number
 	step?: number
+	allowed?: readonly AllowedValue[]
 	unit?: string
 	minLength?: number
 	maxLength?: number
@@ -375,6 +402,7 @@ export type ZUIValueId = {
 	isCurrentValue?: boolean
 	conf?: GatewayValue
 	allowManualEntry?: boolean
+	destructive?: boolean
 	commandClassVersion?: number
 } & TranslatedValueID
 
@@ -388,6 +416,32 @@ export type ZUIScene = {
 	values: ZUIValueIdScene[]
 }
 
+export type ZUIConfigurationTemplateValue = {
+	property: number
+	propertyKey?: number | null
+	endpoint: number
+	value: unknown
+	label?: string
+	description?: string
+}
+
+export type ZUIConfigurationTemplate = {
+	id: string
+	name: string
+	deviceId: string
+	manufacturerId?: number
+	productId?: number
+	productType?: number
+	manufacturer?: string
+	productLabel?: string
+	firmwareRange?: { min?: string; max?: string }
+	values: ZUIConfigurationTemplateValue[]
+	autoApply: boolean
+	contentHash: string
+	createdAt: string
+	updatedAt: string
+}
+
 export type ZUIDeviceClass = {
 	basic: number
 	generic: number
@@ -395,7 +449,7 @@ export type ZUIDeviceClass = {
 }
 
 export type ZUINodeGroups = {
-	text: string
+	title: string
 	value: number
 	endpoint: number
 	maxNodes: number
@@ -466,7 +520,7 @@ export interface BackgroundRSSIPoint {
 
 export interface FwFile {
 	name: string
-	data: Buffer | Uint8Array
+	data: Uint8Array<ArrayBuffer>
 	target?: number
 }
 
@@ -534,7 +588,7 @@ export type ZUINode = {
 	measured0dBm?: number
 	maxLongRangePowerlevel?: number
 	RFRegion?: RFRegion
-	rfRegions?: { text: string; value: number }[]
+	rfRegions?: { title: string; value: number }[]
 	isFrequentListening?: FLiRS
 	isRouting?: boolean
 	keepAwake?: boolean
@@ -545,6 +599,7 @@ export type ZUINode = {
 	hassDevices?: { [key: string]: HassDevice }
 	deviceId?: string
 	hasDeviceConfigChanged?: boolean
+	appliedTemplateContentHashes?: string[]
 	hexId?: string
 	values?: { [key: string]: ZUIValueId }
 	groups?: ZUINodeGroups[]
@@ -574,6 +629,9 @@ export type ZUINode = {
 	defaultVolume?: number
 	protocol?: Protocols
 	supportsLongRange?: boolean
+	availableFirmwareUpdates?: FirmwareUpdateInfo[]
+	firmwareUpdatesDismissed?: { [version: string]: boolean }
+	lastFirmwareUpdateCheck?: number
 }
 
 export type NodeEvent = {
@@ -610,6 +668,7 @@ export type ZwaveConfig = {
 	sendToSleepTimeout?: number
 	responseTimeout?: number
 	enableStatistics?: boolean
+	disableOptimisticValueUpdate?: boolean
 	disclaimerVersion?: number
 	options?: ZWaveOptions
 	// healNetwork?: boolean
@@ -621,12 +680,14 @@ export type ZwaveConfig = {
 	maxNodeEventsQueueSize?: number
 	higherReportsTimeout?: boolean
 	disableControllerRecovery?: boolean
+	disableAutomaticFirmwareUpdateChecks?: boolean
 	rf?: {
 		region?: RFRegion
-		maxLongRangePowerlevel?: number
+		maxLongRangePowerlevel?: number | 'auto'
+		autoPowerlevels?: boolean
 		txPower?: {
-			powerlevel: number
-			measured0dBm: number
+			powerlevel: number | 'auto'
+			measured0dBm?: number
 		}
 	}
 }
@@ -688,6 +749,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 	private destroyed = false
 	private _driverReady: boolean
 	private scenes: ZUIScene[]
+	private _configTemplates: ZUIConfigurationTemplate[]
 	private _nodes: Map<number, ZUINode>
 	private storeNodes: Record<number, Partial<ZUINode>>
 	private _devices: Record<string, Partial<ZUINode>>
@@ -713,6 +775,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 	private commandsTimeout: NodeJS.Timeout
 	private healTimeout: NodeJS.Timeout
 	private updatesCheckTimeout: NodeJS.Timeout
+	private firmwareUpdateCheckTimeout: NodeJS.Timeout
 	private pollIntervals: Record<string, NodeJS.Timeout>
 
 	private _lockNeighborsRefresh: boolean
@@ -725,6 +788,8 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 	private restartTimeout: NodeJS.Timeout
 
 	private driverFunctionCache: utils.Snippet[] = []
+
+	private _extraLogTransports: any[] = []
 
 	// Foreach valueId, we store a callback function to be called when the value changes
 	private valuesObservers: Record<string, ValueIdObserver> = {}
@@ -744,7 +809,6 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 	}
 	private _inclusionState: InclusionState = undefined
 
-	private _controllerListenersAdded: boolean = false
 	public get driverReady() {
 		return this.driver && this._driverReady && !this.closed
 	}
@@ -813,6 +877,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		this.closed = false
 		this.driverReady = false
 		this.scenes = jsonStore.get(store.scenes)
+		this._configTemplates = jsonStore.get(store.configurationTemplates)
 
 		this._nodes = new Map()
 
@@ -831,6 +896,39 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		await this.close(true)
 		this.init()
 		await this.connect()
+	}
+
+	/**
+	 * Register an extra log transport that persists across driver restarts.
+	 * If the driver is already running, the transport is applied immediately.
+	 */
+	addExtraLogTransport(transport: any, level?: string): void {
+		this._extraLogTransports.push(transport)
+		if (this._driver && this._driverReady) {
+			const config: any = {
+				transports: [transport],
+			}
+			if (level) {
+				config.level = level
+			}
+			this._driver.updateLogConfig(config)
+		}
+	}
+
+	/**
+	 * Remove a previously registered extra log transport.
+	 * If the driver is running, the transport is detached immediately.
+	 */
+	removeExtraLogTransport(transport: any): void {
+		const idx = this._extraLogTransports.indexOf(transport)
+		if (idx !== -1) {
+			this._extraLogTransports.splice(idx, 1)
+		}
+		if (this._driver && this._driverReady) {
+			this._driver.updateLogConfig({
+				transports: [],
+			})
+		}
 	}
 
 	backoffRestart(): void {
@@ -949,6 +1047,16 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 			}
 			// discard the old function and store the new one
 			entry.fn = fn
+		}
+	}
+
+	private clearThrottle(key: string) {
+		const entry = this.throttledFunctions.get(key)
+		if (entry) {
+			if (entry.timeout) {
+				clearTimeout(entry.timeout)
+			}
+			this.throttledFunctions.delete(key)
 		}
 	}
 
@@ -1149,6 +1257,11 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 			this.updatesCheckTimeout = null
 		}
 
+		if (this.firmwareUpdateCheckTimeout) {
+			clearTimeout(this.firmwareUpdateCheckTimeout)
+			this.firmwareUpdateCheckTimeout = null
+		}
+
 		if (this.statelessTimeouts) {
 			for (const k in this.statelessTimeouts) {
 				clearTimeout(this.statelessTimeouts[k])
@@ -1176,7 +1289,6 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		if (this._driver) {
 			await this._driver.destroy()
 			this._driver = null
-			this._controllerListenersAdded = false
 		}
 
 		if (!keepListeners) {
@@ -1680,7 +1792,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 				for (const [groupIndex, group] of groups) {
 					// https://zwave-js.github.io/node-zwave-js/#/api/controller?id=associationgroup-interface
 					node.groups.push({
-						text: group.label,
+						title: group.label,
 						endpoint: endpoint,
 						value: groupIndex,
 						maxNodes: group.maxNodes,
@@ -1771,6 +1883,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		source: AssociationAddress,
 		groupId: number,
 		associations: AssociationAddress[],
+		options?: { force?: boolean },
 	) {
 		const zwaveNode = this.getNode(source.nodeId)
 
@@ -1784,6 +1897,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		}
 
 		const result: AssociationCheckResult[] = []
+		const force = options?.force ?? false
 
 		for (const a of associations) {
 			const checkResult = this._driver.controller.checkAssociation(
@@ -1794,16 +1908,27 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 
 			result.push(checkResult)
 
-			if (checkResult === AssociationCheckResult.OK) {
+			if (checkResult === AssociationCheckResult.OK || force) {
+				const isForcedAdd =
+					force && checkResult !== AssociationCheckResult.OK
+				const logLevel = isForcedAdd ? 'warn' : 'info'
+				const action = isForcedAdd ? 'Force adding' : 'Adding'
+				const bypassInfo = isForcedAdd
+					? ` (bypassing check: ${getEnumMemberName(AssociationCheckResult, checkResult)})`
+					: ''
+
 				this.logNode(
 					zwaveNode,
-					'info',
-					`Adding Node ${a.nodeId} to Group ${groupId} of ${sourceMsg}`,
+					logLevel,
+					`${action} Node ${a.nodeId} to Group ${groupId} of ${sourceMsg}${bypassInfo}`,
 				)
 
-				await this._driver.controller.addAssociations(source, groupId, [
-					a,
-				])
+				await this._driver.controller.addAssociations(
+					source,
+					groupId,
+					[a],
+					{ force },
+				)
 			} else {
 				this.logNode(
 					zwaveNode,
@@ -2105,11 +2230,11 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		}
 
 		const AsyncFunction = Object.getPrototypeOf(
-			// eslint-disable-next-line @typescript-eslint/no-empty-function
 			async function () {},
 		).constructor
 
 		const fn = new AsyncFunction('driver', code)
+		const require = createRequire(import.meta.url)
 
 		return fn.call({ zwaveClient: this, require, logger }, this._driver)
 	}
@@ -2118,6 +2243,12 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 	 * Method used to start Z-Wave connection using configuration `port`
 	 */
 	async connect() {
+		// When ZWAVE_PORT env var is set, force enable and override port
+		if (process.env.ZWAVE_PORT) {
+			this.cfg.enabled = true
+			this.cfg.port = process.env.ZWAVE_PORT
+		}
+
 		if (this.cfg.enabled === false) {
 			logger.info('Z-Wave driver DISABLED')
 			return
@@ -2138,29 +2269,18 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 			return
 		}
 
+		let shouldUpdateSettings = false
+
 		// extend options with hidden `options`
 		const zwaveOptions: PartialZWaveOptions = {
-			allowBootloaderOnly: this.cfg.allowBootloaderOnly || false,
+			bootloaderMode: this.cfg.allowBootloaderOnly ? 'allow' : 'recover',
 			storage: {
 				cacheDir: storeDir,
 				deviceConfigPriorityDir:
 					this.cfg.deviceConfigPriorityDir || deviceConfigPriorityDir,
 			},
-			logConfig: {
-				// https://zwave-js.github.io/node-zwave-js/#/api/driver?id=logconfig
-				enabled: this.cfg.logEnabled,
-				level: this.cfg.logLevel
-					? loglevels[this.cfg.logLevel]
-					: 'info',
-				logToFile: this.cfg.logToFile,
-				filename: ZWAVEJS_LOG_FILE,
-				forceConsole: isDocker() ? !this.cfg.logToFile : false,
-				maxFiles: this.cfg.maxFiles || 7,
-				nodeFilter:
-					this.cfg.nodeFilter && this.cfg.nodeFilter.length > 0
-						? this.cfg.nodeFilter.map((n) => parseInt(n))
-						: undefined,
-			},
+			// https://zwave-js.github.io/node-zwave-js/#/api/driver?id=logconfig
+			logConfig: utils.buildLogConfig(this.cfg),
 			emitValueUpdateAfterSetValue: true,
 			apiKeys: {
 				firmwareUpdateService:
@@ -2181,6 +2301,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 			userAgent: {
 				[utils.pkgJson.name]: utils.pkgJson.version,
 			},
+			disableOptimisticValueUpdate: this.cfg.disableOptimisticValueUpdate,
 		}
 
 		// when no env is specified copy config db to store dir
@@ -2192,28 +2313,66 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		if (this.cfg.rf) {
 			const { region, txPower, maxLongRangePowerlevel } = this.cfg.rf
 
+			let { autoPowerlevels } = this.cfg.rf
 			zwaveOptions.rf = {}
 
 			if (typeof region === 'number') {
 				zwaveOptions.rf.region = region
 			}
 
-			if (typeof maxLongRangePowerlevel === 'number') {
-				zwaveOptions.rf.maxLongRangePowerlevel = maxLongRangePowerlevel
+			if (
+				autoPowerlevels === undefined &&
+				typeof maxLongRangePowerlevel !== 'number' &&
+				typeof txPower?.powerlevel !== 'number'
+			) {
+				// if autoPowerlevels is undefined and maxLongRangePowerlevel is not a number (likely '' or undefined), assume autoPowerlevels is true
+				autoPowerlevels = true
+				this.cfg.rf.autoPowerlevels = true
+				shouldUpdateSettings = true
+			}
+
+			if (autoPowerlevels) {
+				zwaveOptions.rf.maxLongRangePowerlevel = 'auto'
+				zwaveOptions.rf.txPower ??= {}
+				zwaveOptions.rf.txPower.powerlevel = 'auto'
 			}
 
 			if (
-				txPower &&
-				typeof txPower.measured0dBm === 'number' &&
-				typeof txPower.powerlevel === 'number'
+				!autoPowerlevels &&
+				(maxLongRangePowerlevel === 'auto' ||
+					typeof maxLongRangePowerlevel === 'number')
 			) {
-				zwaveOptions.rf.txPower = txPower
+				zwaveOptions.rf.maxLongRangePowerlevel = maxLongRangePowerlevel
 			}
+
+			if (txPower) {
+				if (
+					!autoPowerlevels &&
+					(txPower.powerlevel === 'auto' ||
+						typeof txPower.powerlevel === 'number')
+				) {
+					zwaveOptions.rf.txPower ??= {}
+					zwaveOptions.rf.txPower.powerlevel = txPower.powerlevel
+				}
+
+				if (typeof txPower.measured0dBm === 'number') {
+					zwaveOptions.rf.txPower ??= {}
+					zwaveOptions.rf.txPower.measured0dBm = txPower.measured0dBm
+				}
+			}
+		}
+
+		// @ts-expect-error this is defined when running in a pkg bundle
+		if (process.pkg) {
+			// Ensure Z-Wave JS is looking for the configuration files in the right place
+			// when running inside a pkg bundle
+			zwaveOptions.host ??= {}
+			zwaveOptions.host.fs = new PkgFsBindings()
 		}
 
 		// ensure deviceConfigPriorityDir exists to prevent warnings #2374
 		// lgtm [js/path-injection]
-		await ensureDir(zwaveOptions.storage.deviceConfigPriorityDir)
+		await utils.ensureDir(zwaveOptions.storage.deviceConfigPriorityDir)
 
 		// when not set let zwavejs handle this based on the environment
 		if (typeof this.cfg.enableSoftReset === 'boolean') {
@@ -2229,13 +2388,9 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		}
 
 		if (this.cfg.scales) {
-			const scales: Record<string | number, string | number> = {}
-			for (const s of this.cfg.scales) {
-				scales[s.key] = s.label
-			}
-
-			zwaveOptions.preferences = {
-				scales,
+			const preferences = utils.buildPreferences(this.cfg)
+			if (preferences) {
+				zwaveOptions.preferences = preferences
 			}
 		}
 
@@ -2254,33 +2409,52 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		// update settings to fix compatibility
 		if (s0Key && !this.cfg.securityKeys.S0_Legacy) {
 			this.cfg.securityKeys.S0_Legacy = s0Key
-			const settings = jsonStore.get(store.settings)
-			settings.zwave = this.cfg
-			await jsonStore.put(store.settings, settings)
+			shouldUpdateSettings = true
 		}
 
 		utils.parseSecurityKeys(this.cfg, zwaveOptions)
 
+		// Apply driver-only external settings (storage, presets, logFilename, forceConsole).
+		// These are not in ZwaveConfig/settings.json, so they must be applied directly to driver options.
+		applyExternalDriverSettings(zwaveOptions)
+
 		const logTransport = new JSONTransport()
 		logTransport.format = createDefaultTransportFormat(true, false)
 
-		zwaveOptions.logConfig.transports = [logTransport]
+		zwaveOptions.logConfig.transports = [
+			logTransport,
+			...this._extraLogTransports,
+		]
 
 		logTransport.stream.on('data', (data) => {
-			this.socket.emit(socketEvents.debug, data.message.toString())
+			this.socket
+				.to('debug')
+				.emit(socketEvents.debug, data.message.toString())
 		})
 
 		try {
+			if (shouldUpdateSettings) {
+				const settings = jsonStore.get(store.settings)
+				settings.zwave = this.cfg
+				await jsonStore.put(store.settings, settings)
+			}
 			// init driver here because if connect fails the driver is destroyed
 			// this could throw so include in the try/catch
 			this._driver = new Driver(this.cfg.port, zwaveOptions)
-			this._controllerListenersAdded = false
 			this._driver.on('error', this._onDriverError.bind(this))
 			this._driver.on('driver ready', this._onDriverReady.bind(this))
 			this._driver.on('all nodes ready', this._onScanComplete.bind(this))
 			this._driver.on(
 				'bootloader ready',
 				this._onBootLoaderReady.bind(this),
+			)
+			this._driver.on(
+				'firmware update progress',
+				this._onOTWFirmwareUpdateProgress.bind(this),
+			)
+			this._driver.on(
+				'firmware update finished',
+				this._onOTWFirmwareUpdateFinished.bind(this),
 			)
 
 			logger.info(`Connecting to ${this.cfg.port}`)
@@ -2391,7 +2565,15 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		if (this.socket) {
 			// break the sync loop to let the event loop continue #2676
 			process.nextTick(() => {
-				this.socket.emit(evtName, data, ...args)
+				const channel = eventToChannel[evtName]
+				if (channel) {
+					this.socket.to(channel).emit(evtName, data, ...args)
+				} else {
+					logger.warn(
+						`No channel mapping for event ${evtName}, broadcasting to all clients`,
+					)
+					this.socket.emit(evtName, data, ...args)
+				}
 			})
 		}
 	}
@@ -2763,6 +2945,592 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		return true
 	}
 
+	// ------------ CONFIGURATION TEMPLATES MANAGEMENT -----------------------------------
+
+	/**
+	 * Get all configuration templates
+	 */
+	getConfigurationTemplates(): ZUIConfigurationTemplate[] {
+		return this._configTemplates
+	}
+
+	/**
+	 * Get configuration parameter definitions from the zwave-js config DB
+	 * for a device identified by its deviceId (manufacturerId-productId-productType)
+	 */
+	async getDeviceConfigurationParams(
+		deviceId: string,
+	): Promise<Partial<ZUIValueId>[]> {
+		const parts = deviceId.split('-')
+		if (parts.length !== 3) {
+			throw new Error(
+				'Invalid deviceId format, expected manufacturerId-productId-productType',
+			)
+		}
+
+		const manufacturerId = parseInt(parts[0], 10)
+		const productId = parseInt(parts[1], 10)
+		const productType = parseInt(parts[2], 10)
+
+		if (isNaN(manufacturerId) || isNaN(productId) || isNaN(productType)) {
+			throw new Error('Invalid deviceId: non-numeric components')
+		}
+
+		await configManager.loadDeviceIndex()
+
+		const device = await configManager.lookupDevice(
+			manufacturerId,
+			productType,
+			productId,
+		)
+
+		if (!device || !device.paramInformation) {
+			return []
+		}
+
+		const result: Partial<ZUIValueId>[] = []
+
+		for (const [key, param] of device.paramInformation.entries()) {
+			const propertyKey = key.valueBitMask
+			const id = `0-112-0-${key.parameter}${propertyKey != null ? '-' + propertyKey : ''}`
+
+			result.push({
+				id,
+				commandClass: 112,
+				property: key.parameter,
+				propertyKey: propertyKey,
+				endpoint: 0,
+				type: 'number',
+				readable: true,
+				writeable: !param.readOnly,
+				label: param.label,
+				description: param.description,
+				min: param.minValue,
+				max: param.maxValue,
+				default: param.defaultValue,
+				unit: param.unit,
+				list: param.options?.length > 0,
+				allowManualEntry: param.allowManualEntry,
+				states: param.options?.map((o) => ({
+					text: o.label,
+					value: o.value,
+				})),
+				newValue: param.defaultValue,
+			} as any)
+		}
+
+		return result
+	}
+
+	/**
+	 * Create a configuration template from a node's CC 112 values
+	 */
+	async createConfigurationTemplate(
+		nodeId: number,
+		name: string,
+		autoApply = false,
+		values?: ZUIConfigurationTemplateValue[],
+		firmwareRange?: { min?: string; max?: string },
+	): Promise<ZUIConfigurationTemplate> {
+		const node = this._nodes.get(nodeId)
+
+		if (!node) {
+			throw Error(`Node ${nodeId} not found`)
+		}
+
+		if (!node.ready) {
+			throw Error(`Node ${nodeId} is not ready`)
+		}
+
+		let configValues: ZUIConfigurationTemplateValue[]
+
+		if (values && values.length > 0) {
+			// Use custom values provided by the wizard
+			configValues = values
+		} else {
+			// Extract CC 112 (Configuration) writeable values
+			configValues = []
+
+			for (const id in node.values) {
+				const v = node.values[id]
+				if (
+					v.commandClass === CommandClasses.Configuration &&
+					v.writeable
+				) {
+					configValues.push({
+						property: v.property as number,
+						propertyKey:
+							v.propertyKey != null
+								? (v.propertyKey as number)
+								: null,
+						endpoint: v.endpoint || 0,
+						value: v.value,
+						label: v.label,
+						description: v.description,
+					})
+				}
+			}
+		}
+
+		if (configValues.length === 0) {
+			throw Error(
+				`Node ${nodeId} has no writeable Configuration CC values`,
+			)
+		}
+
+		const id = utils.generateId()
+
+		const now = new Date().toISOString()
+
+		const template: ZUIConfigurationTemplate = {
+			id,
+			name,
+			deviceId: node.deviceId,
+			manufacturerId: node.manufacturerId,
+			productId: node.productId,
+			productType: node.productType,
+			manufacturer: node.manufacturer,
+			productLabel: node.productLabel,
+			firmwareRange:
+				firmwareRange?.min || firmwareRange?.max
+					? firmwareRange
+					: undefined,
+			values: configValues,
+			autoApply,
+			contentHash: this._generateTemplateContentHash(
+				configValues,
+				firmwareRange,
+			),
+			createdAt: now,
+			updatedAt: now,
+		}
+
+		this._configTemplates.push(template)
+		await jsonStore.put(store.configurationTemplates, this._configTemplates)
+
+		if (autoApply) {
+			this._autoApplyTemplateToNodes(template)
+		}
+
+		return template
+	}
+
+	/**
+	 * Update an existing configuration template
+	 */
+	async updateConfigurationTemplate(
+		id: string,
+		updates: {
+			name?: string
+			autoApply?: boolean
+			firmwareRange?: { min?: string; max?: string }
+			values?: ZUIConfigurationTemplateValue[]
+		},
+	): Promise<ZUIConfigurationTemplate> {
+		const template = this._configTemplates.find((t) => t.id === id)
+
+		if (!template) {
+			throw Error(`Template ${id} not found`)
+		}
+
+		if (updates.name !== undefined) template.name = updates.name
+		if (updates.autoApply !== undefined)
+			template.autoApply = updates.autoApply
+
+		const contentChanged =
+			updates.firmwareRange !== undefined || updates.values !== undefined
+
+		if (updates.firmwareRange !== undefined)
+			template.firmwareRange = updates.firmwareRange
+		if (updates.values !== undefined) template.values = updates.values
+
+		if (contentChanged) {
+			template.contentHash = this._generateTemplateContentHash(
+				template.values,
+				template.firmwareRange,
+			)
+		}
+
+		template.updatedAt = new Date().toISOString()
+
+		await jsonStore.put(store.configurationTemplates, this._configTemplates)
+
+		if (template.autoApply && contentChanged) {
+			this._autoApplyTemplateToNodes(template)
+		}
+
+		return template
+	}
+
+	/**
+	 * Delete a configuration template
+	 */
+	async deleteConfigurationTemplate(id: string): Promise<boolean> {
+		const index = this._configTemplates.findIndex((t) => t.id === id)
+
+		if (index < 0) {
+			throw Error(`Template ${id} not found`)
+		}
+
+		const deletedHash = this._configTemplates[index].contentHash
+
+		this._configTemplates.splice(index, 1)
+		await jsonStore.put(store.configurationTemplates, this._configTemplates)
+
+		// Cleanup the deleted template's hash from all nodes
+		if (deletedHash) {
+			for (const [, node] of this._nodes) {
+				const hashes = node.appliedTemplateContentHashes
+				if (hashes && hashes.includes(deletedHash)) {
+					// _cleanupAppliedTemplateHashes removes any hash not matching an existing template
+					await this._cleanupAppliedTemplateHashes(node)
+				}
+			}
+		}
+
+		return true
+	}
+
+	/**
+	 * Apply a configuration template to a node
+	 */
+	async applyConfigurationTemplate(
+		templateId: string,
+		nodeId: number,
+		force = false,
+	): Promise<{
+		success: number
+		failed: number
+		errors: string[]
+		reason?: string
+	}> {
+		const template = this._configTemplates.find((t) => t.id === templateId)
+
+		if (!template) {
+			throw Error(`Template ${templateId} not found`)
+		}
+
+		const node = this._nodes.get(nodeId)
+
+		if (!node) {
+			throw Error(`Node ${nodeId} not found`)
+		}
+
+		if (!node.ready) {
+			throw Error(`Node ${nodeId} is not ready`)
+		}
+
+		if (
+			!force &&
+			template.deviceId &&
+			node.deviceId &&
+			template.deviceId !== node.deviceId
+		) {
+			throw Error(
+				`Template device type "${template.deviceId}" does not match node device type "${node.deviceId}". Use force to override.`,
+			)
+		}
+
+		const results: {
+			success: number
+			failed: number
+			errors: string[]
+			reason?: string
+		} = { success: 0, failed: 0, errors: [] }
+
+		for (const tv of template.values) {
+			try {
+				// skip writing `undefined` configuration values to prevent errors
+				if (tv.value === undefined) {
+					results.success++
+					continue
+				}
+
+				const result = await this.writeValue(
+					{
+						nodeId,
+						commandClass: CommandClasses.Configuration,
+						endpoint: tv.endpoint,
+						property: tv.property,
+						propertyKey: tv.propertyKey,
+					} as ZUIValueId,
+					tv.value,
+				)
+
+				if (setValueFailed(result)) {
+					results.failed++
+					results.errors.push(
+						`Parameter ${tv.property}: ${result.message || getEnumMemberName(SetValueStatus, result.status)}`,
+					)
+
+					// Fail + node is dead means no point continuing
+					if (
+						result.status === SetValueStatus.Fail &&
+						node.status === 'Dead'
+					) {
+						const remaining =
+							template.values.length -
+							results.success -
+							results.failed
+						if (remaining > 0) {
+							results.failed += remaining
+						}
+						results.reason = 'Node is dead'
+						break
+					}
+				} else {
+					results.success++
+				}
+			} catch (error) {
+				results.failed++
+				results.errors.push(
+					`Parameter ${tv.property}: ${error.message}`,
+				)
+			}
+		}
+
+		logger.info(
+			`Applied template "${template.name}" to node ${nodeId}: ${results.success} OK, ${results.failed} failed`,
+		)
+
+		// Record content hash if any values were applied successfully
+		if (results.success > 0 && template.contentHash) {
+			if (!node.appliedTemplateContentHashes) {
+				node.appliedTemplateContentHashes = []
+			}
+
+			if (
+				!node.appliedTemplateContentHashes.includes(
+					template.contentHash,
+				)
+			) {
+				node.appliedTemplateContentHashes.push(template.contentHash)
+
+				if (!this.storeNodes[nodeId]) {
+					this.storeNodes[nodeId] = {} as any
+				}
+				this.storeNodes[nodeId].appliedTemplateContentHashes =
+					node.appliedTemplateContentHashes
+
+				this.throttle(
+					'applyTemplate_storeNodes',
+					() => {
+						// eslint-disable-next-line @typescript-eslint/no-floating-promises
+						this.updateStoreNodes(false)
+					},
+					1000,
+				)
+			}
+		}
+
+		return results
+	}
+
+	/**
+	 * Import configuration templates (extends existing templates)
+	 */
+	async importConfigurationTemplates(
+		templates: ZUIConfigurationTemplate[],
+	): Promise<ZUIConfigurationTemplate[]> {
+		// Migrate legacy minFirmwareVersion to firmwareRange
+		for (const t of templates) {
+			if ((t as any).minFirmwareVersion && !t.firmwareRange) {
+				t.firmwareRange = { min: (t as any).minFirmwareVersion }
+				delete (t as any).minFirmwareVersion
+			}
+			t.id = utils.generateId()
+			if (!t.contentHash) {
+				t.contentHash = this._generateTemplateContentHash(
+					t.values,
+					t.firmwareRange,
+				)
+			}
+			this._configTemplates.push(t)
+		}
+
+		await jsonStore.put(store.configurationTemplates, this._configTemplates)
+
+		return this._configTemplates
+	}
+
+	/**
+	 * Generate a short content hash for a template based on its applied values
+	 */
+	private _generateTemplateContentHash(
+		values: ZUIConfigurationTemplateValue[],
+		firmwareRange?: { min?: string; max?: string },
+	): string {
+		// Normalize values to ensure deterministic key ordering across
+		// different code paths (create vs import)
+		const normalized = values.map((v) => ({
+			property: v.property,
+			propertyKey: v.propertyKey ?? null,
+			endpoint: v.endpoint,
+			value: v.value,
+		}))
+		return createHash('sha256')
+			.update(JSON.stringify({ values: normalized, firmwareRange }))
+			.digest('hex')
+			.slice(0, 12)
+	}
+
+	/**
+	 * Remove applied template hashes that no longer match any existing template
+	 */
+	private async _cleanupAppliedTemplateHashes(node: ZUINode) {
+		const hashes = node.appliedTemplateContentHashes
+		if (!hashes || hashes.length === 0) return
+
+		const validHashes = new Set(
+			this._configTemplates.map((t) => t.contentHash),
+		)
+		const cleaned = hashes.filter((h) => validHashes.has(h))
+
+		if (cleaned.length !== hashes.length) {
+			node.appliedTemplateContentHashes = cleaned
+
+			if (!this.storeNodes[node.id]) {
+				this.storeNodes[node.id] = {} as any
+			}
+			this.storeNodes[node.id].appliedTemplateContentHashes = cleaned
+			await this.updateStoreNodes(false)
+		}
+	}
+
+	/**
+	 * Auto-apply a template to all matching ready nodes that haven't received it yet
+	 */
+	private _autoApplyTemplateToNodes(template: ZUIConfigurationTemplate) {
+		if (!this._driver?.controller) return
+
+		for (const [, node] of this._nodes) {
+			if (!node.ready || !node.deviceId) continue
+
+			const matching = this._getMatchingTemplates(node)
+			if (!matching.some((t) => t.id === template.id)) continue
+
+			const hashes = node.appliedTemplateContentHashes || []
+			if (hashes.includes(template.contentHash)) continue
+
+			const zwaveNode = this._driver.controller.nodes.get(node.id)
+
+			if (zwaveNode) {
+				this.logNode(
+					zwaveNode,
+					'info',
+					`Auto-applying configuration template "${template.name}"`,
+				)
+			}
+
+			this.applyConfigurationTemplate(template.id, node.id, true)
+				.then((result) => {
+					if (result.failed > 0 && zwaveNode) {
+						this.logNode(
+							zwaveNode,
+							'warn',
+							`Template "${template.name}" partially applied: ${result.success} OK, ${result.failed} failed`,
+						)
+					}
+				})
+				.catch((error) => {
+					if (zwaveNode) {
+						this.logNode(
+							zwaveNode,
+							'error',
+							`Failed to auto-apply template "${template.name}": ${error.message}`,
+						)
+					}
+				})
+		}
+	}
+
+	/**
+	 * Get templates matching a node's device type and firmware version
+	 */
+	private _getMatchingTemplates(node: ZUINode): ZUIConfigurationTemplate[] {
+		if (!node.deviceId) return []
+
+		return this._configTemplates.filter((t) => {
+			if (t.deviceId !== node.deviceId) return false
+
+			// Check firmware version range if specified
+			if (t.firmwareRange?.min || t.firmwareRange?.max) {
+				if (!node.firmwareVersion) {
+					return false
+				}
+
+				const nodeFw = semverCoerce(node.firmwareVersion)
+				if (!nodeFw) return false
+
+				if (t.firmwareRange.min) {
+					const minFw = semverCoerce(t.firmwareRange.min)
+					if (!minFw || !semverGte(nodeFw, minFw)) {
+						return false
+					}
+				}
+
+				if (t.firmwareRange.max) {
+					const maxFw = semverCoerce(t.firmwareRange.max)
+					if (!maxFw || !semverLte(nodeFw, maxFw)) {
+						return false
+					}
+				}
+			}
+
+			return true
+		})
+	}
+
+	/**
+	 * Check and auto-apply matching configuration templates for a node
+	 */
+	private _checkConfigurationTemplates(node: ZUINode, zwaveNode: ZWaveNode) {
+		// Cleanup stale applied hashes on node ready
+		// eslint-disable-next-line @typescript-eslint/no-floating-promises
+		this._cleanupAppliedTemplateHashes(node)
+
+		const matching = this._getMatchingTemplates(node)
+
+		if (matching.length === 0) {
+			return
+		}
+
+		const appliedHashes = node.appliedTemplateContentHashes || []
+
+		// Filter auto-apply templates that haven't been applied yet
+		const autoApplyTemplates = matching.filter(
+			(t) =>
+				t.autoApply &&
+				t.contentHash &&
+				!appliedHashes.includes(t.contentHash),
+		)
+
+		for (const template of autoApplyTemplates) {
+			this.logNode(
+				zwaveNode,
+				'info',
+				`Auto-applying configuration template "${template.name}"`,
+			)
+			this.applyConfigurationTemplate(template.id, node.id, true)
+				.then((result) => {
+					if (result.failed > 0) {
+						this.logNode(
+							zwaveNode,
+							'warn',
+							`Template "${template.name}" partially applied: ${result.success} OK, ${result.failed} failed`,
+						)
+					}
+				})
+				.catch((error) => {
+					this.logNode(
+						zwaveNode,
+						'error',
+						`Failed to auto-apply template "${template.name}": ${error.message}`,
+					)
+				})
+		}
+	}
+
 	/**
 	 * Get the nodes array
 	 */
@@ -2935,6 +3703,50 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 	}
 
 	/**
+	 * Stops learn mode
+	 */
+	stopLearnMode(): Promise<boolean> {
+		if (this.driverReady) {
+			if (this.commandsTimeout) {
+				clearTimeout(this.commandsTimeout)
+				this.commandsTimeout = null
+			}
+			return this._driver.controller.stopJoiningNetwork()
+		}
+
+		throw new DriverNotReadyError()
+	}
+
+	/**
+	 * Starts learn mode
+	 */
+	async startLearnMode(): Promise<JoinNetworkResult> {
+		if (this.driverReady) {
+			if (this.commandsTimeout) {
+				clearTimeout(this.commandsTimeout)
+				this.commandsTimeout = null
+			}
+
+			this.commandsTimeout = setTimeout(
+				() => {
+					this.stopLearnMode().catch(logger.error)
+				},
+				(this.cfg.commandsTimeout || 0) * 1000 || 30000,
+			)
+
+			const joinNetworkOptions: JoinNetworkOptions = {
+				strategy: JoinNetworkStrategy.Default,
+			}
+
+			return this._driver.controller.beginJoiningNetwork(
+				joinNetworkOptions,
+			)
+		}
+
+		throw new DriverNotReadyError()
+	}
+
+	/**
 	 * Request an update of this value
 	 *
 	 */
@@ -2988,7 +3800,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 			if (strategy === InclusionStrategy.Security_S2) {
 				let inclusionOptions: ReplaceNodeOptions
 				if (options?.qrString) {
-					const parsedQr = parseQRCodeString(options.qrString)
+					const parsedQr = await parseQRCodeString(options.qrString)
 
 					if (parsedQr) {
 						// when replacing a failed node you cannot use smart start so always use qrcode for provisioning
@@ -3105,6 +3917,238 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		throw new DriverNotReadyError()
 	}
 
+	async getAllAvailableFirmwareUpdates(options?: GetFirmwareUpdatesOptions) {
+		if (this.driverReady) {
+			const result =
+				await this._driver.controller.getAllAvailableFirmwareUpdates(
+					options,
+				)
+
+			return result
+		}
+
+		throw new DriverNotReadyError()
+	}
+
+	/**
+	 * Check firmware updates for all nodes and store results in nodes.json
+	 */
+	async checkAllNodesFirmwareUpdates(options?: GetFirmwareUpdatesOptions) {
+		if (!this.driverReady) {
+			throw new DriverNotReadyError()
+		}
+
+		if (this.cfg.disableAutomaticFirmwareUpdateChecks) {
+			logger.info(
+				'Firmware update checks are disabled. Skipping bulk firmware update check.',
+			)
+			return
+		}
+
+		logger.info('Starting bulk firmware update check for all nodes')
+
+		try {
+			const result =
+				await this._driver.controller.getAllAvailableFirmwareUpdates(
+					options,
+				)
+
+			if (result) {
+				const now = Date.now()
+
+				// Process results for each node
+				for (const [nodeId, nodeUpdates] of result) {
+					const filteredUpdates =
+						this._filterFirmwareUpdates(nodeUpdates)
+
+					this._updateNodeFirmwareInfo(nodeId, filteredUpdates, now)
+
+					if (filteredUpdates && filteredUpdates.length > 0) {
+						logger.info(
+							`Found ${filteredUpdates.length} firmware update(s) for node ${nodeId}`,
+						)
+					}
+				}
+
+				// Save to nodes.json
+				await this.updateStoreNodes()
+			}
+
+			return result
+		} catch (error) {
+			logger.error(
+				'Error during bulk firmware update check:',
+				error.message,
+			)
+			throw error
+		}
+	}
+
+	/**
+	 * Dismiss firmware update for a specific node and version
+	 */
+	async dismissFirmwareUpdate(nodeId: number, version: string) {
+		// Ensure store entry exists
+		if (!this.storeNodes[nodeId]) {
+			this.storeNodes[nodeId] = {} as any
+		}
+
+		// Initialize dismissal tracking if not exists
+		if (!this.storeNodes[nodeId].firmwareUpdatesDismissed) {
+			this.storeNodes[nodeId].firmwareUpdatesDismissed = {}
+		}
+
+		// Mark version as dismissed
+		this.storeNodes[nodeId].firmwareUpdatesDismissed[version] = true
+
+		// Update in-memory node
+		const node = this._nodes.get(nodeId)
+		if (node) {
+			if (!node.firmwareUpdatesDismissed) {
+				node.firmwareUpdatesDismissed = {}
+			}
+			node.firmwareUpdatesDismissed[version] = true
+
+			// Emit update to frontend
+			this.emitNodeUpdate(node, {
+				firmwareUpdatesDismissed: node.firmwareUpdatesDismissed,
+			})
+		}
+
+		// Save to nodes.json
+		await this.updateStoreNodes()
+		logger.info(`Dismissed firmware update ${version} for node ${nodeId}`)
+
+		return true
+	}
+
+	/**
+	 * Filter firmware updates to remove downgrades
+	 */
+	private _filterFirmwareUpdates(
+		updates: FirmwareUpdateInfo[] | null,
+	): FirmwareUpdateInfo[] {
+		return (updates || []).filter((update) => !update.downgrade)
+	}
+
+	/**
+	 * Clean up dismissed updates map to only contain versions that exist in available updates
+	 */
+	private _cleanDismissedUpdates(
+		filteredUpdates: FirmwareUpdateInfo[],
+		existingDismissed: { [version: string]: boolean },
+	): { [version: string]: boolean } {
+		const cleanedDismissed: { [version: string]: boolean } = {}
+
+		for (const update of filteredUpdates) {
+			if (existingDismissed[update.version]) {
+				cleanedDismissed[update.version] = true
+			}
+		}
+
+		return cleanedDismissed
+	}
+
+	/**
+	 * Update node firmware information in store and memory
+	 */
+	private _updateNodeFirmwareInfo(
+		nodeId: number,
+		filteredUpdates: FirmwareUpdateInfo[],
+		timestamp: number,
+	) {
+		// Ensure store entry exists
+		if (!this.storeNodes[nodeId]) {
+			this.storeNodes[nodeId] = {} as any
+		}
+
+		// Update stored firmware update info
+		this.storeNodes[nodeId].availableFirmwareUpdates = filteredUpdates
+		this.storeNodes[nodeId].lastFirmwareUpdateCheck = timestamp
+
+		// Clean up dismissed updates map
+		const existingDismissed =
+			this.storeNodes[nodeId].firmwareUpdatesDismissed || {}
+		const cleanedDismissed = this._cleanDismissedUpdates(
+			filteredUpdates,
+			existingDismissed,
+		)
+		this.storeNodes[nodeId].firmwareUpdatesDismissed = cleanedDismissed
+
+		// Update in-memory node
+		const node = this._nodes.get(nodeId)
+		if (node) {
+			node.availableFirmwareUpdates = filteredUpdates
+			node.lastFirmwareUpdateCheck = timestamp
+			node.firmwareUpdatesDismissed = cleanedDismissed
+
+			// Emit update to frontend
+			this.emitNodeUpdate(node, {
+				availableFirmwareUpdates: node.availableFirmwareUpdates,
+				lastFirmwareUpdateCheck: node.lastFirmwareUpdateCheck,
+				firmwareUpdatesDismissed: node.firmwareUpdatesDismissed,
+			})
+		}
+	}
+
+	/**
+	 * Check for firmware updates on a specific node
+	 * Called after firmware updates, node interviews, and node additions to refresh availableFirmwareUpdates
+	 */
+	private async _checkNodeFirmwareUpdates(nodeId: number) {
+		if (!this.driverReady) {
+			return
+		}
+
+		if (this.cfg.disableAutomaticFirmwareUpdateChecks) {
+			logger.info(
+				`Firmware update checks are disabled. Skipping check for node ${nodeId}.`,
+			)
+			return
+		}
+
+		try {
+			// Get updated firmware information
+			const updates =
+				await this._driver.controller.getAvailableFirmwareUpdates(
+					nodeId,
+				)
+
+			const filteredUpdates = this._filterFirmwareUpdates(updates)
+			const timestamp = Date.now()
+
+			this._updateNodeFirmwareInfo(nodeId, filteredUpdates, timestamp)
+
+			// Save to nodes.json
+			await this.updateStoreNodes()
+
+			logger.info(
+				`Checked firmware updates for node ${nodeId} after update completion. Found ${filteredUpdates.length} update(s)`,
+			)
+		} catch (error) {
+			logger.error(
+				`Failed to check firmware updates for node ${nodeId} after update: ${error.message}`,
+			)
+		}
+	}
+
+	/**
+	 * Get available non-dismissed firmware updates for a node
+	 */
+	getNodeFirmwareUpdates(nodeId: number): FirmwareUpdateInfo[] {
+		const node = this._nodes.get(nodeId)
+		if (!node?.availableFirmwareUpdates) {
+			return []
+		}
+
+		// Filter out dismissed updates
+		return node.availableFirmwareUpdates.filter((update) => {
+			const dismissed =
+				node.firmwareUpdatesDismissed?.[update.version] || false
+			return !dismissed
+		})
+	}
+
 	async firmwareUpdateOTA(nodeId: number, updateInfo: FirmwareUpdateInfo) {
 		if (this.driverReady) {
 			const node = this._nodes.get(nodeId)
@@ -3145,7 +4189,31 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 	async setRFRegion(region: RFRegion): Promise<boolean> {
 		if (this.driverReady) {
 			const result = await this._driver.controller.setRFRegion(region)
-			await this.updateControllerNodeProps(null, ['RFRegion'])
+
+			// Determine which properties need updating
+			const propsToUpdate: Array<
+				'powerlevel' | 'RFRegion' | 'maxLongRangePowerlevel'
+			> = ['RFRegion']
+
+			const supportsAutoPowerlevel = regionSupportsAutoPowerlevel(region)
+
+			// If powerlevels are in auto mode, refresh them after region change
+			if (supportsAutoPowerlevel) {
+				if (
+					this.cfg.rf?.autoPowerlevels ||
+					this.cfg.rf?.txPower?.powerlevel === 'auto'
+				) {
+					propsToUpdate.push('powerlevel')
+				}
+				if (
+					this.cfg.rf?.autoPowerlevels ||
+					this.cfg.rf?.maxLongRangePowerlevel === 'auto'
+				) {
+					propsToUpdate.push('maxLongRangePowerlevel')
+				}
+			}
+
+			await this.updateControllerNodeProps(null, propsToUpdate)
 			return result
 		}
 
@@ -3158,7 +4226,9 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 				await this._driver.controller.setMaxLongRangePowerlevel(
 					powerlevel,
 				)
-			await this.updateControllerNodeProps(null, ['RFRegion'])
+			await this.updateControllerNodeProps(null, [
+				'maxLongRangePowerlevel',
+			])
 			return result
 		}
 
@@ -3226,7 +4296,9 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 						break
 					case InclusionStrategy.Security_S2:
 						if (options?.qrString) {
-							const parsedQr = parseQRCodeString(options.qrString)
+							const parsedQr = await parseQRCodeString(
+								options.qrString,
+							)
 							if (!parsedQr) {
 								throw Error(`Invalid QR code string`)
 							}
@@ -3236,7 +4308,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 							} else if (
 								parsedQr.version === QRCodeVersion.SmartStart
 							) {
-								this.provisionSmartStartNode(parsedQr)
+								await this.provisionSmartStartNode(parsedQr)
 								return true
 							} else {
 								throw Error(`Invalid QR code version`)
@@ -3356,6 +4428,12 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 			this.sendToSocket(socketEvents.rebuildRoutesProgress, [
 				[nodeId, status],
 			])
+
+			// Refresh priority and custom SUC return routes after rebuild completes
+			// The cache is cleared during rebuild, so we read from the cache to update UI
+			this.getCustomSUCReturnRoute(nodeId)
+			this.getPrioritySUCReturnRoute(nodeId)
+
 			return result
 		}
 
@@ -3903,8 +4981,8 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 	 * Used to trigger an update of controller FW
 	 */
 	async firmwareUpdateOTW(
-		file: FwFile,
-	): Promise<ControllerFirmwareUpdateResult> {
+		file: FwFile | FirmwareUpdateInfo,
+	): Promise<OTWFirmwareUpdateResult> {
 		try {
 			if (backupManager.backupOnEvent) {
 				this.nvmEvent = 'before_controller_fw_update_otw'
@@ -3912,17 +4990,23 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 			}
 			let firmware: Firmware
 
+			if (file['files']) {
+				return await this.driver.firmwareUpdateOTW(
+					file as FirmwareUpdateInfo,
+				)
+			}
+
+			file = file as FwFile
+
 			try {
 				const format = guessFirmwareFileFormat(file.name, file.data)
-				firmware = await extractFirmwareAsync(file.data, format)
+				firmware = await extractFirmware(file.data, format)
 			} catch (err) {
 				throw Error(
 					`Unable to extract firmware from file '${file.name}'`,
 				)
 			}
-			const result = await this.driver.controller.firmwareUpdateOTW(
-				firmware.data,
-			)
+			const result = await this.driver.firmwareUpdateOTW(firmware.data)
 			return result
 		} catch (e) {
 			throw Error(`Error while updating firmware: ${e.message}`)
@@ -3959,7 +5043,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 
 			for (const f of files) {
 				let { data, name } = f
-				if (data instanceof Buffer) {
+				if (isUint8Array(data)) {
 					try {
 						let format: FirmwareFileFormat
 						if (name.endsWith('.zip')) {
@@ -3977,10 +5061,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 							format = guessFirmwareFileFormat(name, data)
 						}
 
-						const firmware = await extractFirmwareAsync(
-							data,
-							format,
-						)
+						const firmware = await extractFirmware(data, format)
 						if (f.target !== undefined) {
 							firmware.firmwareTarget = f.target
 						}
@@ -4163,7 +5244,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 
 		logger.log('info', 'Calling api %s with args: %o', apiName, args)
 
-		if (this.driverReady || this.driver?.isInBootloader()) {
+		if (this.driverReady || this.driver?.mode === DriverMode.Bootloader) {
 			try {
 				const allowed =
 					typeof this[apiName] === 'function' &&
@@ -4398,59 +5479,33 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 				/* ignore */
 			})
 
-			if (!this._controllerListenersAdded) {
-				this._controllerListenersAdded = true
-				this.driver.controller
-					.on(
-						'inclusion started',
-						this._onInclusionStarted.bind(this),
-					)
-					.on(
-						'exclusion started',
-						this._onExclusionStarted.bind(this),
-					)
-					.on(
-						'inclusion stopped',
-						this._onInclusionStopped.bind(this),
-					)
-					.on(
-						'exclusion stopped',
-						this._onExclusionStopped.bind(this),
-					)
-					.on(
-						'inclusion state changed',
-						this._onInclusionStateChanged.bind(this),
-					)
-					.on('inclusion failed', this._onInclusionFailed.bind(this))
-					.on('exclusion failed', this._onExclusionFailed.bind(this))
-					.on('node found', this._onNodeFound.bind(this))
-					.on('node added', this._onNodeAdded.bind(this))
-					.on('node removed', this._onNodeRemoved.bind(this))
-					.on(
-						'rebuild routes progress',
-						this._onRebuildRoutesProgress.bind(this),
-					)
-					.on(
-						'rebuild routes done',
-						this._onRebuildRoutesDone.bind(this),
-					)
-					.on(
-						'statistics updated',
-						this._onControllerStatisticsUpdated.bind(this),
-					)
-					.on(
-						'firmware update progress',
-						this._onControllerFirmwareUpdateProgress.bind(this),
-					)
-					.on(
-						'firmware update finished',
-						this._onControllerFirmwareUpdateFinished.bind(this),
-					)
-					.on(
-						'status changed',
-						this._onControllerStatusChanged.bind(this),
-					)
-			}
+			this.driver.controller
+				.on('inclusion started', this._onInclusionStarted.bind(this))
+				.on('exclusion started', this._onExclusionStarted.bind(this))
+				.on('inclusion stopped', this._onInclusionStopped.bind(this))
+				.on('exclusion stopped', this._onExclusionStopped.bind(this))
+				.on(
+					'inclusion state changed',
+					this._onInclusionStateChanged.bind(this),
+				)
+				.on('inclusion failed', this._onInclusionFailed.bind(this))
+				.on('exclusion failed', this._onExclusionFailed.bind(this))
+				.on('node found', this._onNodeFound.bind(this))
+				.on('node added', this._onNodeAdded.bind(this))
+				.on('node removed', this._onNodeRemoved.bind(this))
+				.on(
+					'rebuild routes progress',
+					this._onRebuildRoutesProgress.bind(this),
+				)
+				.on('rebuild routes done', this._onRebuildRoutesDone.bind(this))
+				.on(
+					'statistics updated',
+					this._onControllerStatisticsUpdated.bind(this),
+				)
+				.on(
+					'status changed',
+					this._onControllerStatusChanged.bind(this),
+				)
 		} catch (error) {
 			// Fixes freak error in "driver ready" handler #1309
 			logger.error(error.message)
@@ -4523,75 +5578,50 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		}
 	}
 
-	private _onControllerFirmwareUpdateProgress(
-		progress: ControllerFirmwareUpdateProgress,
-	) {
-		const nodeId = this.driver.controller.ownNodeId
-		const node = this.nodes.get(nodeId)
-		if (node) {
-			node.firmwareUpdate = {
-				sentFragments: progress.sentFragments,
-				totalFragments: progress.totalFragments,
-				progress: progress.progress,
-				currentFile: node.firmwareUpdate?.currentFile ?? 1,
-				totalFiles: node.firmwareUpdate?.currentFile ?? 1,
-			}
-
-			// send at most 4msg per second
-			this.throttle(
-				this._onControllerFirmwareUpdateProgress.name,
-				this.emitNodeUpdate.bind(this, node, {
-					firmwareUpdate: node.firmwareUpdate,
-				} as utils.DeepPartial<ZUINode>),
-				250,
-			)
-		}
+	private _onOTWFirmwareUpdateProgress(progress: OTWFirmwareUpdateProgress) {
+		this.throttle(
+			this._onOTWFirmwareUpdateProgress.name,
+			this.sendToSocket.bind(this, socketEvents.otwFirmwareUpdate, {
+				progress,
+			}),
+			250,
+		)
 
 		this.emit(
 			'event',
-			EventSource.CONTROLLER,
+			EventSource.DRIVER,
 			'controller firmware update progress',
-			this.zwaveNodeToJSON(this.driver.controller.nodes.get(nodeId)),
 			progress,
 		)
 	}
 
-	private _onControllerFirmwareUpdateFinished(
-		result: ControllerFirmwareUpdateResult,
-	) {
-		const nodeId = this.driver.controller.ownNodeId
-		const node = this.nodes.get(nodeId)
-		const zwaveNode = this.driver.controller.nodes.get(nodeId)
+	private _onOTWFirmwareUpdateFinished(result: OTWFirmwareUpdateResult) {
+		// prevent progress event to come after finish
+		this.clearThrottle(this._onOTWFirmwareUpdateProgress.name)
 
-		if (node) {
-			node.firmwareUpdate = undefined
-
-			this.emitNodeUpdate(node, {
-				firmwareUpdate: false,
-				firmwareUpdateResult: {
-					success: result.success,
-					status: getEnumMemberName(
-						ControllerFirmwareUpdateStatus,
-						result.status,
-					),
-				},
-			} as any)
-		}
+		this.sendToSocket(socketEvents.otwFirmwareUpdate, {
+			result: {
+				success: result.success,
+				status: getEnumMemberName(
+					OTWFirmwareUpdateStatus,
+					result.status,
+				),
+			},
+		})
 
 		logger.info(
-			`Controller ${zwaveNode.id} firmware update OTW finished ${
+			`Controller firmware update OTW finished ${
 				result.success ? 'successfully' : 'with error'
 			}.\n   Status: ${getEnumMemberName(
-				ControllerFirmwareUpdateStatus,
+				OTWFirmwareUpdateStatus,
 				result.status,
 			)}. Result: ${JSON.stringify(result)}.`,
 		)
 
 		this.emit(
 			'event',
-			EventSource.CONTROLLER,
+			EventSource.DRIVER,
 			'controller firmware update finished',
-			this.zwaveNodeToJSON(zwaveNode),
 			result,
 		)
 	}
@@ -4701,6 +5731,11 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		this.emit('scanComplete')
 
 		this.emit('event', EventSource.DRIVER, 'all nodes ready')
+
+		// Schedule periodic firmware update checks
+		this._scheduledFirmwareUpdateCheck().catch(() => {
+			/* ignore */
+		})
 	}
 
 	// ---------- CONTROLLER EVENTS -------------------------------
@@ -4870,7 +5905,9 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 	) {
 		const toRebuild = [...progress.values()]
 		const rebuiltNodes = toRebuild.filter((v) => v !== 'pending')
-		const message = `Rebuild Routes process IN PROGRESS. Healed ${rebuiltNodes.length} nodes`
+		const allDone = toRebuild.every((v) => v !== 'pending')
+		const status = allDone ? 'COMPLETED' : 'IN PROGRESS'
+		const message = `Rebuild Routes process ${status}. Healed ${rebuiltNodes.length} nodes`
 		this._updateControllerStatus(message)
 		this.sendToSocket(socketEvents.rebuildRoutesProgress, [
 			...progress.entries(),
@@ -5015,9 +6052,11 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 
 		const fileName = `${NVM_BACKUP_PREFIX}${utils.fileDate()}${event}`
 
-		await mkdirp(nvmBackupsDir)
+		await utils.ensureDir(nvmBackupsDir)
 
 		await writeFile(utils.joinPath(nvmBackupsDir, fileName + '.bin'), data)
+
+		this._updateControllerStatus('NVM backup completed successfully')
 
 		return { data: Buffer.from(data.buffer), fileName }
 	}
@@ -5027,7 +6066,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		this._updateControllerStatus(`Backup NVM progress: ${progress}%`)
 	}
 
-	async restoreNVM(data: Buffer, useRaw = false) {
+	async restoreNVM(data: Uint8Array<ArrayBuffer>, useRaw = false) {
 		if (!this.driverReady) {
 			throw new DriverNotReadyError()
 		}
@@ -5044,6 +6083,8 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 				this._onRestoreNVMProgress.bind(this),
 			)
 		}
+
+		this._updateControllerStatus('NVM restore completed successfully')
 	}
 
 	private _onConvertNVMProgress(bytesRead: number, totalBytes: number) {
@@ -5113,12 +6154,12 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		this.driver.controller.unprovisionSmartStartNode(dskOrNodeId)
 	}
 
-	parseQRCodeString(qrString: string): {
+	async parseQRCodeString(qrString: string): Promise<{
 		parsed?: QRProvisioningInformation
 		nodeId?: number
 		exists: boolean
-	} {
-		const parsed = parseQRCodeString(qrString)
+	}> {
+		const parsed = await parseQRCodeString(qrString)
 		let node: ZWaveNode | undefined
 		let exists = false
 
@@ -5137,14 +6178,14 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		}
 	}
 
-	provisionSmartStartNode(entry: PlannedProvisioningEntry | string) {
+	async provisionSmartStartNode(entry: PlannedProvisioningEntry | string) {
 		if (!this.driverReady) {
 			throw new DriverNotReadyError()
 		}
 
 		if (typeof entry === 'string') {
 			// it's a qrcode
-			entry = parseQRCodeString(entry)
+			entry = await parseQRCodeString(entry)
 		}
 
 		if (!entry.dsk) {
@@ -5342,6 +6383,9 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 
 		this._onNodeStatus(zwaveNode)
 
+		// Check for matching configuration templates
+		this._checkConfigurationTemplates(node, zwaveNode)
+
 		this.emit(
 			'event',
 			EventSource.NODE,
@@ -5447,6 +6491,14 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		)
 
 		this._onNodeStatus(zwaveNode, true)
+
+		this._checkNodeFirmwareUpdates(zwaveNode.id).catch((error) => {
+			this.logNode(
+				zwaveNode,
+				'error',
+				`Failed to check firmware updates after interview: ${error.message}`,
+			)
+		})
 
 		this.emit(
 			'event',
@@ -5731,37 +6783,42 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 
 		let data = null
 
-		if (ccId === CommandClasses.Notification) {
-			valueId.property = args.label
-			valueId.propertyKey = args.eventLabel
-
-			data = this._parseNotification(args.parameters)
-		} else if (ccId === CommandClasses['Entry Control']) {
-			valueId.property = args.eventType.toString()
-			valueId.propertyKey = args.dataType
-			data =
-				args.eventData instanceof Buffer
+		switch (ccId) {
+			case CommandClasses.Notification:
+				valueId.property = args.label
+				valueId.propertyKey = args.eventLabel
+				data = this._parseNotification(args.parameters)
+				break
+			case CommandClasses['Entry Control']:
+				valueId.property = args.eventType.toString()
+				valueId.propertyKey = args.dataType
+				data = isUint8Array(args.eventData)
 					? utils.buffer2hex(args.eventData)
 					: args.eventData
-		} else if (ccId === CommandClasses['Multilevel Switch']) {
-			valueId.property = getEnumMemberName(
-				MultilevelSwitchCommand,
-				args.eventType as number,
-			)
-			data = args.direction
-		} else if (ccId === CommandClasses.Powerlevel) {
-			// ignore, this should be handled in zwave-js
-			return
-		} else {
-			this.logNode(
-				zwaveNode,
-				'error',
-				'Unknown notification received CC %s: %o',
-				valueId.commandClassName,
-				args,
-			)
-
-			return
+				break
+			case CommandClasses['Multilevel Switch']:
+				valueId.property = getEnumMemberName(
+					MultilevelSwitchCommand,
+					args.eventType as number,
+				)
+				data = args.direction
+				break
+			case CommandClasses.Powerlevel:
+				// ignore, this should be handled in zwave-js
+				return
+			case CommandClasses['Battery']:
+				valueId.property = args.eventType
+				data = getEnumMemberName(BatteryReplacementStatus, args.urgency)
+				break
+			default:
+				this.logNode(
+					zwaveNode,
+					'error',
+					'Unknown notification received CC %s: %o',
+					valueId.commandClassName,
+					args,
+				)
+				return
 		}
 
 		valueId.id = this._getValueID(valueId, true)
@@ -5877,6 +6934,10 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 			if (node) {
 				node.firmwareUpdate = undefined
 
+				this.clearThrottle(
+					this._onNodeFirmwareUpdateProgress.name + '_' + node.id,
+				)
+
 				this.emitNodeUpdate(node, {
 					firmwareUpdate: false,
 				} as any)
@@ -5894,10 +6955,6 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 					result.waitTime !== undefined ? `${result.waitTime}s` : 'No'
 				}.\n   Result: ${JSON.stringify(result)}.`,
 			)
-
-			if (result.reInterview) {
-				this.logNode(zwaveNode, 'info', 'Will be re-interviewed')
-			}
 
 			this.emit(
 				'event',
@@ -6041,6 +7098,14 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 			customSUCReturnRoutes:
 				this._driver.controller.getCustomSUCReturnRoutesCached(nodeId),
 			applicationRoute: null,
+			availableFirmwareUpdates:
+				this.storeNodes[nodeId]?.availableFirmwareUpdates || [],
+			firmwareUpdatesDismissed:
+				this.storeNodes[nodeId]?.firmwareUpdatesDismissed || {},
+			lastFirmwareUpdateCheck:
+				this.storeNodes[nodeId]?.lastFirmwareUpdateCheck || 0,
+			appliedTemplateContentHashes:
+				this.storeNodes[nodeId]?.appliedTemplateContentHashes || [],
 		}
 
 		this._nodes.set(nodeId, node)
@@ -6198,12 +7263,12 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 					.getSupportedRFRegions()
 					?.map((region) => ({
 						value: region,
-						text: getEnumMemberName(RFRegion, region),
+						title: getEnumMemberName(RFRegion, region),
 						disabled:
 							region === RFRegion.Unknown ||
 							region === RFRegion['Default (EU)'],
 					}))
-					.sort((a, b) => a.text.localeCompare(b.text)) ?? []
+					.sort((a, b) => a.title.localeCompare(b.title)) ?? []
 		}
 	}
 
@@ -6325,6 +7390,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 			valueId.min = (zwaveValueMeta as ValueMetadataNumeric).min
 			valueId.max = (zwaveValueMeta as ValueMetadataNumeric).max
 			valueId.step = (zwaveValueMeta as ValueMetadataNumeric).steps
+			valueId.allowed = (zwaveValueMeta as ValueMetadataNumeric).allowed
 			valueId.unit = (zwaveValueMeta as ValueMetadataNumeric).unit
 		} else if (zwaveValueMeta.type === 'string') {
 			valueId.minLength = (
@@ -6344,6 +7410,20 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 			valueId.allowManualEntry = (
 				zwaveValueMeta as ConfigurationMetadata
 			).allowManualEntry
+			// If allowManualEntry is not explicitly set and the value has
+			// allowed ranges (not just single values), default to allowing
+			// manual entry. This supports the new value format in zwave-js
+			// v15.21.0+ where values like Wake Up Interval have named states
+			// (e.g., "Default", "Disabled") but also allow custom values
+			// within a range.
+			if (
+				valueId.allowManualEntry === undefined &&
+				valueId.allowed?.some(
+					(entry) => 'from' in entry && 'to' in entry,
+				)
+			) {
+				valueId.allowManualEntry = true
+			}
 			valueId.states = []
 			for (const k in (zwaveValueMeta as ValueMetadataNumeric).states) {
 				valueId.states.push({
@@ -6358,6 +7438,10 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 			}
 		} else {
 			valueId.list = false
+		}
+
+		if ((zwaveValueMeta as ConfigurationMetadata).destructive) {
+			valueId.destructive = true
 		}
 
 		return valueId
@@ -6728,6 +7812,38 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 		)
 	}
 
+	private async _scheduledFirmwareUpdateCheck() {
+		// Check if automatic firmware update checks are disabled
+		if (this.cfg.disableAutomaticFirmwareUpdateChecks) {
+			logger.info('Automatic firmware update checks are disabled')
+			return
+		}
+
+		try {
+			await this.checkAllNodesFirmwareUpdates()
+		} catch (error) {
+			logger.warn(
+				`Scheduled firmware update check has failed: ${error.message}`,
+			)
+		}
+
+		// Schedule next check for a random delay between 23 and 25 hours to avoid thundering herd problem
+		const minHours = 23
+		const maxHours = 25
+		const randomHours = minHours + Math.random() * (maxHours - minHours)
+		const waitMillis = randomHours * 60 * 60 * 1000
+
+		const nextCheckTime = new Date(Date.now() + waitMillis)
+		logger.info(
+			`Next firmware update check scheduled for: ${nextCheckTime}`,
+		)
+
+		this.firmwareUpdateCheckTimeout = setTimeout(
+			this._scheduledFirmwareUpdateCheck.bind(this),
+			waitMillis,
+		)
+	}
+
 	/**
 	 * Try to poll a value, don't throw. Used in the setTimeout
 	 *
@@ -6751,7 +7867,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 	private async loadFakeNodes() {
 		const filePath = utils.joinPath(true, 'fakeNodes.json')
 		// load fake nodes from `fakeNodes.json` for testing
-		if (await exists(filePath)) {
+		if (await utils.pathExists(filePath)) {
 			const fakeNodes = JSON.parse(await readFile(filePath, 'utf-8'))
 			for (const node of fakeNodes) {
 				// convert valueIds array to map
@@ -6760,6 +7876,8 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 					values[this._getValueID(value)] = value
 				}
 				node.values = values
+				node.inited = false // so nodeInited event is triggered
+				node.hassDevices = {}
 				this._nodes.set(node.id, node)
 				this.emitNodeUpdate(node)
 			}
@@ -6793,8 +7911,8 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 				let api: 'firmwareUpdateOTW' | 'firmwareUpdateOTA'
 				if (this.nodes.get(nodeId).isControllerNode) {
 					api = 'firmwareUpdateOTW'
-					this._onControllerFirmwareUpdateFinished({
-						status: ControllerFirmwareUpdateStatus.OK,
+					this._onOTWFirmwareUpdateFinished({
+						status: OTWFirmwareUpdateStatus.OK,
 						success: true,
 					})
 				} else {
@@ -6838,7 +7956,7 @@ class ZwaveClient extends TypedEventEmitter<ZwaveClientEventCallbacks> {
 					.catch(() => {
 						//noop
 					})
-				this._onControllerFirmwareUpdateProgress({
+				this._onOTWFirmwareUpdateProgress({
 					sentFragments: progress.sentFragments,
 					totalFragments: progress.totalFragments,
 					progress: progress.progress,

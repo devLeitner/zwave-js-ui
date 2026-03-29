@@ -1,37 +1,5 @@
 <template>
-	<v-container grid-list-md>
-		<v-row>
-			<v-col cols="12">
-				<v-btn text @click="importScenes">
-					Import
-					<v-icon right dark color="primary">file_upload</v-icon>
-				</v-btn>
-				<v-btn text @click="exportScenes">
-					Export
-					<v-icon right dark color="primary">file_download</v-icon>
-				</v-btn>
-			</v-col>
-
-			<v-col cols="12" sm="6">
-				<v-select
-					label="Scene"
-					v-model="selectedScene"
-					:items="scenesWithId"
-					item-text="label"
-					item-value="sceneid"
-				></v-select>
-			</v-col>
-
-			<v-col cols="12" sm="6">
-				<v-text-field
-					label="New Scene"
-					append-outer-icon="send"
-					@click:append-outer="createScene"
-					v-model.trim="newScene"
-				></v-text-field>
-			</v-col>
-		</v-row>
-
+	<v-container fluid class="pa-4">
 		<DialogSceneValue
 			@save="saveValue"
 			@close="closeDialog"
@@ -42,62 +10,119 @@
 		/>
 
 		<v-data-table
-			v-if="selectedScene"
 			:headers="headers_scenes"
 			:items="scene_values"
 			class="elevation-1"
 		>
-			<template v-slot:top>
-				<v-btn color="red darken-1" text @click="removeScene"
-					>Delete</v-btn
-				>
-				<v-btn color="green darken-1" text @click="activateScene"
-					>Activate</v-btn
-				>
-				<v-btn color="blue darken-1" text @click="dialogValue = true"
-					>New Value</v-btn
-				>
+			<template #top>
+				<v-col class="pt-0">
+					<v-row>
+						<v-col cols="12" sm="6" class="d-flex align-center">
+							<v-select
+								v-model="selectedScene"
+								:items="scenesWithId"
+								item-title="label"
+								item-value="sceneid"
+								label="Scene"
+								class="ma-2"
+								hide-details
+								variant="outlined"
+								style="max-width: 300px; min-width: 250px"
+								clearable
+							></v-select>
+							<v-btn
+								variant="text"
+								color="primary"
+								@click="createScene"
+							>
+								<v-icon start>add</v-icon>
+								New Scene
+							</v-btn>
+						</v-col>
+						<v-col
+							cols="12"
+							sm="6"
+							class="d-flex align-center justify-end"
+						>
+							<v-btn variant="text" @click="importScenes">
+								Import
+								<v-icon end color="primary">file_upload</v-icon>
+							</v-btn>
+							<v-btn variant="text" @click="exportScenes">
+								Export
+								<v-icon end color="primary"
+									>file_download</v-icon
+								>
+							</v-btn>
+						</v-col>
+					</v-row>
+					<v-row v-if="selectedScene">
+						<v-col class="d-flex align-center">
+							<v-btn
+								color="error"
+								variant="text"
+								@click="removeScene"
+							>
+								<v-icon start>delete</v-icon>
+								Delete
+							</v-btn>
+							<v-btn
+								color="success"
+								variant="text"
+								@click="activateScene"
+							>
+								<v-icon start>play_arrow</v-icon>
+								Activate
+							</v-btn>
+							<v-btn
+								color="primary"
+								variant="text"
+								@click="dialogValue = true"
+							>
+								<v-icon start>add</v-icon>
+								New Value
+							</v-btn>
+						</v-col>
+					</v-row>
+				</v-col>
 			</template>
 
-			<template v-slot:item="{ item }">
-				<tr>
-					<td class="text-xs">{{ item.id }}</td>
-					<td class="text-xs">{{ item.nodeId }}</td>
-					<td class="text-xs">{{ item.label }}</td>
-					<td class="text-xs">{{ item.value }}</td>
-					<td class="text-xs">
-						{{
-							item.timeout ? 'After ' + item.timeout + 's' : 'No'
-						}}
-					</td>
-					<td>
-						<v-icon
-							small
-							color="green"
-							class="mr-2"
-							@click="editItem(item)"
-							>edit</v-icon
-						>
-						<v-icon small color="red" @click="deleteItem(item)"
-							>delete</v-icon
-						>
-					</td>
-				</tr>
+			<template #[`item.timeout`]="{ item }">
+				{{ item.timeout ? 'After ' + item.timeout + 's' : 'No' }}
+			</template>
+			<template #[`item.actions`]="{ item }">
+				<v-icon
+					size="small"
+					color="success"
+					class="mr-2"
+					@click="editItem(item)"
+					v-tooltip:bottom="'Edit'"
+					>edit</v-icon
+				>
+				<v-icon
+					size="small"
+					color="error"
+					@click="deleteItem(item)"
+					v-tooltip:bottom="'Delete'"
+					>delete</v-icon
+				>
 			</template>
 		</v-data-table>
 	</v-container>
 </template>
 <script>
-import { mapState, mapActions } from 'pinia'
+import { mapState } from 'pinia'
 import useBaseStore from '../stores/base.js'
 import InstancesMixin from '../mixins/InstancesMixin.js'
+import { defineAsyncComponent } from 'vue'
 
 export default {
 	name: 'Scenes',
 	mixins: [InstancesMixin],
 	components: {
-		DialogSceneValue: () =>
-			import('@/components/dialogs/DialogSceneValue.vue'),
+		DialogSceneValue: defineAsyncComponent(
+			() => import('@/components/dialogs/DialogSceneValue.vue'),
+		),
 	},
 	watch: {
 		selectedScene() {
@@ -111,8 +136,10 @@ export default {
 		...mapState(useBaseStore, ['nodes']),
 		scenesWithId() {
 			return this.scenes.map((s) => {
-				s.label = `[${s.sceneid}] ${s.label}`
-				return s
+				return {
+					...s,
+					label: `[${s.sceneid}] ${s.label}`,
+				}
 			})
 		},
 		dialogTitle() {
@@ -124,22 +151,20 @@ export default {
 			dialogValue: false,
 			scenes: [],
 			selectedScene: null,
-			newScene: '',
 			scene_values: [],
 			editedValue: {},
 			editedIndex: -1,
 			headers_scenes: [
-				{ text: 'Value ID', value: 'id' },
-				{ text: 'Node', value: 'nodeId' },
-				{ text: 'Label', value: 'label' },
-				{ text: 'Value', value: 'value' },
-				{ text: 'Timeout', value: 'timeout' },
-				{ text: 'Actions', sortable: false },
+				{ title: 'Value ID', key: 'id' },
+				{ title: 'Node', key: 'nodeId' },
+				{ title: 'Label', key: 'label' },
+				{ title: 'Value', key: 'value' },
+				{ title: 'Timeout', key: 'timeout' },
+				{ title: 'Actions', key: 'actions', sortable: false },
 			],
 		}
 	},
 	methods: {
-		...mapActions(useBaseStore, ['showSnackbar']),
 		async importScenes() {
 			if (
 				await this.app.confirm(
@@ -181,19 +206,35 @@ export default {
 
 			if (response.success) {
 				this.scenes = response.result
+				if (!this.selectedScene) {
+					this.selectedScene = this.scenes.length
+						? this.scenes[0].sceneid
+						: null
+				}
 			}
 		},
 		async createScene() {
-			if (this.newScene) {
-				const response = await this.app.apiRequest('_createScene', [
-					this.newScene,
-				])
+			const result = await this.app.confirm('New Scene', '', 'info', {
+				confirmText: 'Create',
+				inputs: [
+					{
+						type: 'text',
+						label: 'Scene name',
+						key: 'name',
+						required: true,
+					},
+				],
+			})
 
-				if (response.success) {
-					this.showSnackbar('Scene created', 'success')
-					this.newScene = ''
-					this.refreshScenes()
-				}
+			if (!result || !result.name) return
+
+			const response = await this.app.apiRequest('_createScene', [
+				result.name,
+			])
+
+			if (response.success) {
+				this.showSnackbar('Scene created', 'success')
+				this.refreshScenes()
 			}
 		},
 		async removeScene() {

@@ -2,53 +2,53 @@
 	<div class="fill-height">
 		<v-expansion-panels v-model="openPanel">
 			<v-expansion-panel>
-				<v-expansion-panel-header> Options </v-expansion-panel-header>
-				<v-expansion-panel-content>
+				<v-expansion-panel-title> Options </v-expansion-panel-title>
+				<v-expansion-panel-text>
 					<v-row>
 						<v-col>
-							<v-subheader>Legend</v-subheader>
-							<v-list dense>
+							<v-list-subheader>Legend</v-list-subheader>
+							<v-list density="compact">
 								<v-list-item
 									v-for="(item, i) in legends"
 									:key="i"
 								>
-									<v-list-item-icon>
+									<template #prepend>
 										<v-icon :color="item.color">{{
 											item.icon || 'turned_in'
 										}}</v-icon>
-									</v-list-item-icon>
-									<v-list-item-content>
-										<v-list-item-title
-											:style="{ color: item.textColor }"
-											v-text="item.text"
-										></v-list-item-title>
-									</v-list-item-content>
+									</template>
+
+									<v-list-item-title
+										:style="{ color: item.textColor }"
+									>
+										{{ item.text }}</v-list-item-title
+									>
 								</v-list-item>
 							</v-list>
 						</v-col>
 						<v-col>
-							<v-subheader>Edges</v-subheader>
-							<v-list dense>
+							<v-list-subheader>Edges</v-list-subheader>
+							<v-list density="compact">
 								<v-list-item
 									v-for="(item, i) in edgesLegend"
 									:key="i"
 								>
-									<v-list-item-icon>
+									<template #prepend>
 										<v-icon :color="item.color">{{
 											item.icon || 'turned_in'
 										}}</v-icon>
-									</v-list-item-icon>
-									<v-list-item-content>
-										<v-list-item-title
-											:style="{ color: item.textColor }"
-											v-text="item.text"
-										></v-list-item-title>
-									</v-list-item-content>
+									</template>
+
+									<v-list-item-title
+										:style="{ color: item.textColor }"
+									>
+										{{ item.text }}
+									</v-list-item-title>
 								</v-list-item>
 							</v-list>
 						</v-col>
 						<v-col>
-							<v-subheader>Filters</v-subheader>
+							<v-list-subheader>Filters</v-list-subheader>
 
 							<v-autocomplete
 								:items="locations"
@@ -57,38 +57,28 @@
 								label="Locations filter"
 								clearable
 								chips
-								deletable-chips
-								solo
+								closable-chips
+								variant="solo"
 							>
-								<template slot="append-outer">
-									<v-tooltip bottom>
-										<template
-											v-slot:activator="{ on, attrs }"
-										>
-											<v-btn
-												v-bind="attrs"
-												v-on="on"
-												@click="
-													invertLocationsFilter =
-														!invertLocationsFilter
-												"
-												icon
-												:color="
-													invertLocationsFilter
-														? 'primary'
-														: ''
-												"
-												:class="
-													invertLocationsFilter
-														? 'border-primary'
-														: ''
-												"
-											>
-												<v-icon>loop</v-icon>
-											</v-btn>
-										</template>
-										<span>Invert selection</span>
-									</v-tooltip>
+								<template #append>
+									<v-btn
+										v-tooltip:bottom="'Invert selection'"
+										@click="
+											invertLocationsFilter =
+												!invertLocationsFilter
+										"
+										icon="loop"
+										:color="
+											invertLocationsFilter
+												? 'primary'
+												: ''
+										"
+										:class="
+											invertLocationsFilter
+												? 'border-primary'
+												: ''
+										"
+									/>
 								</template>
 							</v-autocomplete>
 
@@ -98,41 +88,29 @@
 								multiple
 								label="Nodes filter"
 								clearable
-								item-text="_name"
+								item-title="_name"
 								item-value="id"
 								chips
-								deletable-chips
-								solo
+								closable-chips
+								variant="solo"
 							>
-								<template slot="append-outer">
-									<v-tooltip bottom>
-										<template
-											v-slot:activator="{ on, attrs }"
-										>
-											<v-btn
-												v-bind="attrs"
-												v-on="on"
-												@click="
-													invertNodesFilter =
-														!invertNodesFilter
-												"
-												icon
-												:color="
-													invertNodesFilter
-														? 'primary'
-														: ''
-												"
-												:class="
-													invertNodesFilter
-														? 'border-primary'
-														: ''
-												"
-											>
-												<v-icon>loop</v-icon>
-											</v-btn>
-										</template>
-										<span>Invert selection</span>
-									</v-tooltip>
+								<template #append>
+									<v-btn
+										v-tooltip:bottom="'Invert selection'"
+										@click="
+											invertNodesFilter =
+												!invertNodesFilter
+										"
+										icon="loop"
+										:color="
+											invertNodesFilter ? 'primary' : ''
+										"
+										:class="
+											invertNodesFilter
+												? 'border-primary'
+												: ''
+										"
+									/>
 								</template>
 							</v-autocomplete>
 
@@ -147,43 +125,9 @@
 								label="Show priority routes"
 								:disabled="selectedNodes.length === 0"
 							></v-checkbox>
-
-							<v-badge
-								color="error"
-								overlap
-								v-model="shouldReload"
-							>
-								<v-btn color="primary" @click="paintGraph">
-									Reload graph
-								</v-btn>
-							</v-badge>
-
-							<v-btn
-								class="ml-3"
-								:color="liveUpdate ? 'error' : 'success'"
-								@click="toggleLive()"
-							>
-								Live
-								<v-icon>{{
-									liveUpdate ? 'pause' : 'play_arrow'
-								}}</v-icon>
-							</v-btn>
 						</v-col>
-
-						<!-- <v-col>
-							<v-subheader>Grouping</v-subheader>
-
-							<v-radio-group v-model="grouping">
-								<v-radio
-									v-for="(item, i) in groupingLegend"
-									:key="i"
-									:label="item.text"
-									:value="item.value"
-								></v-radio>
-							</v-radio-group>
-						</v-col> -->
 					</v-row>
-				</v-expansion-panel-content>
+				</v-expansion-panel-text>
 			</v-expansion-panel>
 		</v-expansion-panels>
 
@@ -214,67 +158,65 @@
 					ref="content"
 				></div>
 				<v-menu
-					v-model="menu"
+					v-model="showMenu"
 					:close-on-content-click="false"
-					:position-x="menuX"
-					:position-y="menuY"
+					location="bottom left"
+					:style="{
+						position: 'fixed',
+						left: menuX + 'px',
+						top: menuY + 'px',
+					}"
 				>
 					<v-card v-if="hoverNode">
-						<v-subheader class="font-weight-bold">{{
+						<v-list-subheader class="ml-2 font-weight-bold">{{
 							hoverNode._name
-						}}</v-subheader>
+						}}</v-list-subheader>
 
 						<v-divider></v-divider>
 
 						<v-list
 							style="min-width: 300px; background: transparent"
-							dense
+							density="compact"
 							class="pa-0 text-caption"
 						>
-							<v-list-item dense>
-								<v-list-item-content>ID</v-list-item-content>
-								<v-list-item-content
-									class="align-end font-weight-bold"
-									>{{ hoverNode.id }}</v-list-item-content
-								>
+							<v-list-item density="compact">
+								ID
+								<template #append>
+									<span class="align-end font-weight-bold">{{
+										hoverNode.id
+									}}</span>
+								</template>
 							</v-list-item>
-							<v-list-item dense>
-								<v-list-item-content
-									>Product</v-list-item-content
-								>
-								<v-list-item-content
-									class="align-end font-weight-bold"
-									>{{
+							<v-list-item density="compact">
+								Product
+								<template #append>
+									<span class="align-end font-weight-bold">{{
 										hoverNode.productLabel +
 										(hoverNode.productDescription
 											? ' (' +
 												hoverNode.productDescription +
 												')'
 											: '')
-									}}</v-list-item-content
-								>
+									}}</span>
+								</template>
 							</v-list-item>
-							<v-list-item dense>
-								<v-list-item-content>Power</v-list-item-content>
-								<v-list-item-content
-									class="align-end font-weight-bold"
-									>{{
+							<v-list-item density="compact">
+								Power
+								<template #append>
+									<span class="align-end font-weight-bold">{{
 										hoverNode.minBatteryLevel
 											? hoverNode.minBatteryLevel + '%'
 											: 'MAIN'
-									}}</v-list-item-content
-								>
+									}}</span>
+								</template>
 							</v-list-item>
-							<v-list-item dense>
-								<v-list-item-content
-									>Neighbors</v-list-item-content
-								>
-								<v-list-item-content
-									class="align-end font-weight-bold"
-									>{{
+							<v-list-item density="compact">
+								Neighbors
+								<template #append>
+									<span class="align-end font-weight-bold">{{
 										hoverNode.neighbors.join(', ') || 'None'
-									}}</v-list-item-content
-								>
+									}}</span>
+								</template>
 							</v-list-item>
 						</v-list>
 					</v-card>
@@ -296,8 +238,8 @@ import {
 	protocolDataRateToString,
 	rssiToString,
 	isRssiError,
-} from 'zwave-js/safe'
-import { RouteKind } from '@zwave-js/core/safe'
+	RouteKind,
+} from '@zwave-js/core'
 import { uuid, arraysEqual } from '../../lib/utils'
 import useBaseStore from '../../stores/base.js'
 import { mapState } from 'pinia'
@@ -322,7 +264,7 @@ export default {
 			return this.isDark ? '#ddd' : '#333'
 		},
 		isDark() {
-			return this.$vuetify.theme.dark
+			return this.$vuetify.theme.current.dark
 		},
 		locations() {
 			// get unique locations array from nodes
@@ -368,6 +310,7 @@ export default {
 	},
 	network: null, // do not make this reactive, see https://github.com/visjs/vis-network/issues/173#issuecomment-541435420
 	unsubscribeUpdate: null, // pinia update action unsubscribe function
+	_routesFetchedFor: new Set(), // de-duplicates route fetch requests per node
 	data() {
 		return {
 			openPanel: -1,
@@ -378,15 +321,12 @@ export default {
 			showApplicationRoutes: true,
 			menuX: 0,
 			menuY: 0,
-			menu: false,
+			showMenu: false,
 			hoverNode: null,
-			liveUpdate: false,
-			shouldReload: false,
 			locationsFilter: [],
 			invertLocationsFilter: false,
 			nodesFilter: [],
 			invertNodesFilter: false,
-			// grouping: 'ungrouped',
 			refreshTimeout: null,
 			updateTimeout: null,
 			loading: false,
@@ -473,22 +413,9 @@ export default {
 					text: 'Unknown',
 				},
 			],
-			// groupingLegend: [
-			// 	{
-			// 		text: 'Z-Wave Locations',
-			// 		value: 'z-wave',
-			// 	},
-			// 	{
-			// 		text: 'Ungrouped',
-			// 		value: 'ungrouped',
-			// 	},
-			// ],
 		}
 	},
 	watch: {
-		grouping() {
-			this.debounceRefresh()
-		},
 		filteredNodes(val, oldVal) {
 			if (!arraysEqual(val, oldVal)) {
 				this.selectedNodes = val.map((n) => n.id)
@@ -545,27 +472,29 @@ export default {
 	mounted() {
 		this.paintGraph()
 
-		this.unsubscribeUpdate = useBaseStore().$onAction(({ name, args }) => {
-			if (name === 'updateMeshGraph') {
-				if (this.liveUpdate) {
+		this.unsubscribeUpdate = useBaseStore().$onAction(
+			({ name, args, after }) => {
+				if (name === 'updateMeshGraph') {
 					if (this.updateTimeout) {
 						clearTimeout(this.updateTimeout)
 					}
-
 					this.updateTimeout = setTimeout(
 						this.onNodeUpdate.bind(this, args[0]),
 						1000,
 					)
-				} else {
-					this.shouldReload = true
+				} else if (name === 'initNodes') {
+					this.debounceRefresh()
+				} else if (name === 'updateNode') {
+					after(() => {
+						this.onNodeUpdatedOrAdded(args[0])
+					})
+				} else if (name === 'removeNode') {
+					this.onNodeRemoved(args[0])
 				}
-			} else if (name === 'initNodes') {
-				// trick to prevent empty network when refreshing page
-				this.debounceRefresh()
-			}
-		})
+			},
+		)
 	},
-	beforeDestroy() {
+	beforeUnmount() {
 		if (this.refreshTimeout) {
 			clearTimeout(this.refreshTimeout)
 		}
@@ -586,21 +515,11 @@ export default {
 		onResize() {
 			// when container resizes get its height and set content to that
 			// so that the graph can be resized
-			this.containerHeight = this.$refs.container.offsetHeight
+			this.containerHeight = this.$refs.container.$el.offsetHeight
 			const maxHeight = window.innerHeight - 180
 			// prevent to grow bigger then window height
 			if (this.containerHeight > maxHeight) {
 				this.containerHeight = maxHeight
-			}
-		},
-		toggleLive() {
-			this.liveUpdate = !this.liveUpdate
-
-			// if should reload is true it means we have some
-			// updates that were not applied, so we need to firstly
-			// reload the graph and then start the live update
-			if (this.liveUpdate && this.shouldReload) {
-				this.paintGraph()
 			}
 		},
 		destroyNetwork() {
@@ -627,56 +546,200 @@ export default {
 			if (this.network && !this.loading) {
 				const { nodes, edges } = this.network.body.data
 
-				const edgesToRemove = []
-				const allEdges = {} // edgeId => [edge, edge, ...]
-				const removedIds = [] // removed edgeIds
+				// collect old edges for this node, keyed by signature
+				const oldEdgesByKey = {} // key => [edge, ...]
+				const allOtherEdges = {} // edgeId => [edge, ...]
 
 				edges.forEach((e) => {
-					const edgeId = this.getEdgeId(e)
-
 					if (e.routeOf === node.id) {
-						edgesToRemove.push(e.id)
-						if (this.priorityEdges[edgeId]?.id === e.id) {
-							delete this.priorityEdges[edgeId]
-							// we deleted the edge with the higher protocolDataRate
-							// keep track of it so we can update this later
-							removedIds.push(edgeId)
+						const key = `${e.from}-${e.to}-${e.routeKind}`
+						if (!oldEdgesByKey[key]) {
+							oldEdgesByKey[key] = []
 						}
-					} else if (allEdges[edgeId]) {
-						allEdges[edgeId].push(e)
+						oldEdgesByKey[key].push(e)
 					} else {
-						allEdges[edgeId] = [e]
+						const edgeId = this.getEdgeId(e)
+						if (allOtherEdges[edgeId]) {
+							allOtherEdges[edgeId].push(e)
+						} else {
+							allOtherEdges[edgeId] = [e]
+						}
 					}
 				})
 
-				// update the edge with hight protocolDataRate to prevent
-				// having unconneted nodes
-				for (const edgeId of removedIds) {
-					const edges = allEdges[edgeId]
-					if (edges) {
-						// set the edge with hight protocolDataRate
-						this.priorityEdges[edgeId] = edges.reduce(
-							(prev, curr) =>
-								prev.protocolDataRate > curr.protocolDataRate
-									? prev
-									: curr,
-						)
+				// clear priorityEdges for this node's old edges
+				for (const key in oldEdgesByKey) {
+					for (const e of oldEdgesByKey[key]) {
+						const edgeId = this.getEdgeId(e)
+						if (this.priorityEdges[edgeId]?.id === e.id) {
+							delete this.priorityEdges[edgeId]
+						}
 					}
 				}
 
-				nodes.remove(node.id)
-				edges.remove(edgesToRemove)
+				// parse new edges
 				const result = this.parseNode(node)
-				nodes.add(result.node)
-				edges.add(result.edges)
+
+				// match new edges to old ones by signature, reuse IDs
+				const edgesToUpdate = []
+				const edgesToAdd = []
+				const usedOldIds = new Set()
+
+				for (const newEdge of result.edges) {
+					const key = `${newEdge.from}-${newEdge.to}-${newEdge.routeKind}`
+					const oldPool = oldEdgesByKey[key]
+					const oldEdge =
+						oldPool && oldPool.find((e) => !usedOldIds.has(e.id))
+
+					if (oldEdge) {
+						usedOldIds.add(oldEdge.id)
+						newEdge.id = oldEdge.id
+						edgesToUpdate.push(newEdge)
+					} else {
+						edgesToAdd.push(newEdge)
+					}
+				}
+
+				// remove unmatched old edges
+				const edgesToRemove = []
+				for (const key in oldEdgesByKey) {
+					for (const e of oldEdgesByKey[key]) {
+						if (!usedOldIds.has(e.id)) {
+							edgesToRemove.push(e.id)
+						}
+					}
+				}
+
+				// update priorityEdges for removed edges that were priorities
+				for (const eId of edgesToRemove) {
+					const removedEdge = edges.get(eId)
+					if (!removedEdge) continue
+					const edgeId = this.getEdgeId(removedEdge)
+
+					// only recompute if the removed edge was the current priority
+					if (
+						this.priorityEdges[edgeId] &&
+						this.priorityEdges[edgeId].id === eId
+					) {
+						const candidates = allOtherEdges[edgeId]
+						if (candidates && candidates.length > 0) {
+							this.priorityEdges[edgeId] = candidates.reduce(
+								(prev, curr) =>
+									prev.protocolDataRate >
+									curr.protocolDataRate
+										? prev
+										: curr,
+							)
+						} else {
+							delete this.priorityEdges[edgeId]
+						}
+					}
+				}
+
+				edges.remove(edgesToRemove)
+				edges.update(edgesToUpdate)
+				edges.add(edgesToAdd)
+				nodes.update(result.node)
+
+				// node has no routes yet, request them (once per node)
+				const hadNoEdges = Object.keys(oldEdgesByKey).length === 0
+				if (
+					hadNoEdges &&
+					result.edges.length === 0 &&
+					!this._routesFetchedFor.has(node.id)
+				) {
+					this._routesFetchedFor.add(node.id)
+					this.$emit('node-added', node)
+				}
 
 				const params = {
 					nodes: this.selectedNodes,
 				}
 
 				this.network.setSelection(params)
+				this.handleSelectNode(params, true)
+			}
+		},
+		stabilizeGraph() {
+			if (!this.network) return
+			this.network.setOptions({
+				physics: {
+					enabled: true,
+					stabilization: { fit: false },
+				},
+			})
+			this.network.once('stabilizationIterationsDone', () => {
+				this.network.setOptions({ physics: false })
+			})
+			this.network.stabilize()
+		},
+		onNodeUpdatedOrAdded(n) {
+			if (!this.network || this.loading) return
+
+			const { nodes, edges } = this.network.body.data
+
+			const node = useBaseStore().getNode(n.id)
+			if (!node) return
+
+			if (nodes.get(n.id)) {
+				// node already in graph — update its visual properties
+				// save/restore priorityEdges because parseNode calls
+				// parseRouteStats which overwrites entries with edge
+				// objects that are never added to the DataSet
+				const saved = { ...this.priorityEdges }
+				const result = this.parseNode(node)
+				this.priorityEdges = saved
+				nodes.update(result.node)
+				return
+			}
+
+			// new node — add it with edges and stabilize
+			const result = this.parseNode(node)
+			nodes.add(result.node)
+			edges.add(result.edges)
+
+			// notify parent to fetch routes for this node so edges can be rendered
+			this._routesFetchedFor.add(node.id)
+			this.$emit('node-added', node)
+			this.stabilizeGraph()
+		},
+		onNodeRemoved(n) {
+			if (!this.network || this.loading) return
+
+			const { nodes, edges } = this.network.body.data
+			if (!nodes.get(n.id)) return
+
+			const edgesToRemove = []
+			edges.forEach((e) => {
+				if (e.routeOf === n.id || e.from === n.id || e.to === n.id) {
+					edgesToRemove.push(e.id)
+				}
+			})
+
+			for (const eId of edgesToRemove) {
+				const edge = edges.get(eId)
+				if (edge) {
+					const edgeId = this.getEdgeId(edge)
+					if (this.priorityEdges[edgeId]?.id === eId) {
+						delete this.priorityEdges[edgeId]
+					}
+				}
+			}
+
+			edges.remove(edgesToRemove)
+			nodes.remove(n.id)
+
+			// deselect removed node and un-hide others
+			const idx = this.selectedNodes.indexOf(n.id)
+			if (idx !== -1) {
+				this.selectedNodes.splice(idx, 1)
+				const params = { nodes: this.selectedNodes }
+				this.network.setSelection(params)
 				this.handleSelectNode(params)
 			}
+
+			this.$emit('node-removed', n)
+			this.stabilizeGraph()
 		},
 		getEdgeId(edge) {
 			return `${edge.from}-${edge.to}`
@@ -693,6 +756,12 @@ export default {
 					return '#3F51B5'
 				default:
 					return '#666666'
+			}
+		},
+		clearSelection() {
+			if (this.network && !this.loading) {
+				this.network.unselectAll()
+				this.handleSelectNode({ nodes: [] })
 			}
 		},
 		setSelection() {
@@ -716,11 +785,10 @@ export default {
 			}
 		},
 		paintGraph() {
-			this.shouldReload = false
-
 			this.destroyNetwork()
 
 			this.priorityEdges = {}
+			this._routesFetchedFor = new Set()
 
 			this.loading = true
 
@@ -760,7 +828,7 @@ export default {
 					// shadow: true,
 				},
 				physics: {
-					enabled: true, // enabling physics reduces performance a lot
+					enabled: true,
 					stabilization: {
 						enabled: true,
 						iterations: 50,
@@ -782,6 +850,7 @@ export default {
 			// https://visjs.github.io/vis-network/docs/network/#Events
 			this.network.once('stabilizationIterationsDone', () => {
 				this.loading = false
+				this.network.setOptions({ physics: false })
 				this.setSelection()
 			})
 
@@ -794,26 +863,8 @@ export default {
 			this.network.on('dragEnd', this.handleDragEnd.bind(this))
 
 			this.network.on('select', this.handleSelectNode.bind(this))
-
-			// this.network.on('hoverEdge', function (e) {
-			// 	this.body.data.edges.update({
-			// 		id: e.edge,
-			// 		font: {
-			// 			size: 12,
-			// 		},
-			// 	})
-			// })
-
-			// this.network.on('blurEdge', function (e) {
-			// 	this.body.data.edges.update({
-			// 		id: e.edge,
-			// 		font: {
-			// 			size: 0,
-			// 		},
-			// 	})
-			// })
 		},
-		handleSelectNode(params) {
+		handleSelectNode(params, skipFit = false) {
 			let { nodes: selectedNodes } = params
 
 			const { edges, nodes } = this.network.body.data
@@ -881,6 +932,7 @@ export default {
 			nodes.forEach((n) => {
 				const shouldBeHidden =
 					selectedNodes.length > 0 &&
+					!n.isControllerNode &&
 					!selectedNodes.includes(n.id) &&
 					!repeaters.includes(n.id)
 
@@ -895,13 +947,17 @@ export default {
 
 			nodes.update(nodesToUpdate)
 
-			this.network.fit()
+			if (!skipFit) {
+				this.network.fit()
+			}
 		},
 		handleDragStart() {
 			this.dragging = true
+			this.network.setOptions({ physics: true })
 		},
 		handleDragEnd() {
 			this.dragging = false
+			this.stabilizeGraph()
 		},
 		handleHoverNode(params) {
 			// show menu
@@ -915,7 +971,7 @@ export default {
 					this.hoverNode = item
 					this.menuX = event.clientX + 5
 					this.menuY = event.clientY + 5
-					this.menu = true
+					this.showMenu = true
 					this.hoverNodeTimeout = null
 				}, 1000)
 			}
@@ -926,21 +982,31 @@ export default {
 				this.hoverNodeTimeout = null
 			} else {
 				// hide menu
-				this.menu = false
+				this.showMenu = false
 				this.hoverNode = null
 			}
 		},
 		handleClick(params) {
 			if (params.event) {
 				params.event.preventDefault()
-				// https://visjs.github.io/vis-network/docs/network/#events
-				// Add interactivity
 				const nodeId = params.nodes[0]
 				if (nodeId) {
 					const node = this.allNodes.find((n) => n.id === nodeId)
 					this.$emit('node-click', node)
 				} else {
 					this.$emit('node-click', null)
+				}
+				// sync graph visibility when the 'select' event
+				// doesn't fire (e.g. clicking an already-selected
+				// node after drag). Skip when selection changed,
+				// since the 'select' event handler already covers it.
+				const clickedNodes = params.nodes || []
+				const selectedSet = new Set(this.selectedNodes)
+				const selectionUnchanged =
+					clickedNodes.length === selectedSet.size &&
+					clickedNodes.every((id) => selectedSet.has(id))
+				if (selectionUnchanged) {
+					this.handleSelectNode(params, true)
 				}
 			}
 		},
@@ -1160,7 +1226,6 @@ export default {
 				entity.shape = 'hexagon'
 			} else {
 				entity.shape = 'square'
-				// entity.ctxRenderer = this.renderBattery
 			}
 
 			if (node.failed) {
@@ -1177,7 +1242,6 @@ export default {
 
 			if (hubNode === id) {
 				entity.label = 'Controller'
-				// entity.fixed = true
 			} else {
 				// parse application route
 				this.parseRouteStats(

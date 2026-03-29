@@ -10,95 +10,90 @@
 			>
 				<v-treeview
 					v-if="!loadingStore"
-					:active.sync="active"
-					v-model="selectedFiles"
+					v-model:activated="active"
+					v-model:selected="selectedFiles"
 					:items="items"
 					activatable
 					selectable
-					item-key="path"
-					:open.sync="openFolders"
+					select-strategy="leaf"
+					item-value="path"
+					v-model:opened="openFolders"
+					:load-children="getFolderItems"
 					return-object
 					style="max-height: calc(100vh - 64px); overflow-y: auto"
 				>
-					<template v-slot:prepend="{ item, open }">
-						<v-icon color="#FFC107" v-if="item.children">
+					<template #prepend="{ item, open }">
+						<v-icon color="warning" v-if="item.children">
 							{{ open ? 'folder_open' : 'folder' }}
 						</v-icon>
-						<v-icon color="blue" v-else> text_snippet </v-icon>
+						<v-icon color="primary" v-else> text_snippet </v-icon>
 					</template>
-					<template v-slot:label="{ item }">
-						<span class="subtitle-2">{{ item.name }}</span>
-						<div class="caption grey--text">
+					<template #title="{ item }">
+						<span class="text-subtitle-2">{{ item.name }}</span>
+						<div class="text-caption text-grey">
 							{{ item.size !== 'n/a' ? item.size : '' }}
 						</div>
 					</template>
-					<template v-slot:append="{ item }">
+					<template #append="{ item }">
 						<v-row justify-end class="ma-1">
-							<v-menu v-if="item.children" offset-y>
-								<template v-slot:activator="{ on }">
-									<v-icon v-on="on">more_vert</v-icon>
+							<v-menu v-if="item.children" location="bottom">
+								<template #activator="{ props }">
+									<v-icon v-bind="props">more_vert</v-icon>
 								</template>
-								<v-list class="py-0" dense>
+								<v-list class="py-0" density="compact">
 									<v-list-item
-										dense
+										density="compact"
 										@click.stop="writeFile(item.path, true)"
+										title="New Folder"
 									>
-										<v-list-item-icon>
-											<v-icon color="yellow"
+										<template #prepend>
+											<v-icon color="warning"
 												>create_new_folder</v-icon
 											>
-										</v-list-item-icon>
-										<v-list-item-title
-											>Create New
-											Folder</v-list-item-title
-										>
+										</template>
 									</v-list-item>
 									<v-list-item
-										dense
+										density="compact"
 										@click.stop="
 											writeFile(item.path, false)
 										"
+										title="New File"
 									>
-										<v-list-item-icon>
+										<template #prepend>
 											<v-icon color="primary"
 												>post_add</v-icon
 											>
-										</v-list-item-icon>
-										<v-list-item-title
-											>Add File</v-list-item-title
-										>
+										</template>
 									</v-list-item>
 									<v-list-item
-										dense
+										density="compact"
 										v-if="!item.isRoot"
 										@click.stop="deleteFile(item)"
+										title="Delete"
 									>
-										<v-list-item-icon>
-											<v-icon color="red">delete</v-icon>
-										</v-list-item-icon>
-										<v-list-item-title
-											>Delete</v-list-item-title
-										>
+										<template #prepend>
+											<v-icon color="error"
+												>delete</v-icon
+											>
+										</template>
 									</v-list-item>
 									<v-list-item
-										dense
+										density="compact"
 										@click.stop="uploadFile(item)"
+										title="Upload File"
 									>
-										<v-list-item-icon>
-											<v-icon color="orange"
+										<template #prepend>
+											<v-icon color="success"
 												>upload</v-icon
 											>
-										</v-list-item-icon>
-										<v-list-item-title
-											>Upload File</v-list-item-title
-										>
+										</template>
 									</v-list-item>
 								</v-list>
 							</v-menu>
 							<!-- only show delete -->
 							<v-icon
 								v-else
-								color="red"
+								color="error"
 								@click.stop="deleteFile(item)"
 								>delete</v-icon
 							>
@@ -112,123 +107,6 @@
 						style="align-self: center"
 					></v-progress-circular>
 				</div>
-				<v-speed-dial bottom fab right absolute v-model="fab">
-					<template v-slot:activator>
-						<v-btn
-							color="blue darken-2"
-							dark
-							fab
-							hover
-							v-model="fab"
-						>
-							<v-icon v-if="fab">close</v-icon>
-							<v-icon v-else>settings</v-icon>
-						</v-btn>
-					</template>
-					<v-tooltip left>
-						<template v-slot:activator="{ on, attrs }">
-							<v-btn
-								fab
-								dark
-								small
-								color="green"
-								@click="restoreZip()"
-								v-bind="attrs"
-								v-on="on"
-							>
-								<v-icon>restore</v-icon>
-							</v-btn>
-						</template>
-						<span>Restore</span>
-					</v-tooltip>
-
-					<v-tooltip left>
-						<template v-slot:activator="{ on, attrs }">
-							<v-btn
-								fab
-								dark
-								small
-								color="orange"
-								@click="uploadFile()"
-								v-bind="attrs"
-								v-on="on"
-							>
-								<v-icon>upload</v-icon>
-							</v-btn>
-						</template>
-						<span>Upload File</span>
-					</v-tooltip>
-
-					<v-tooltip left>
-						<template v-slot:activator="{ on, attrs }">
-							<v-btn
-								fab
-								dark
-								small
-								color="purple"
-								@click="backupStore"
-								v-bind="attrs"
-								v-on="on"
-							>
-								<v-icon>backup</v-icon>
-							</v-btn>
-						</template>
-						<span>Backup</span>
-					</v-tooltip>
-
-					<v-tooltip left>
-						<template v-slot:activator="{ on, attrs }">
-							<v-btn
-								fab
-								dark
-								small
-								color="yellow"
-								@click="refreshTree"
-								v-bind="attrs"
-								v-on="on"
-							>
-								<v-icon>refresh</v-icon>
-							</v-btn>
-						</template>
-						<span>Refresh</span>
-					</v-tooltip>
-
-					<v-tooltip left>
-						<template v-slot:activator="{ on, attrs }">
-							<v-btn
-								v-if="selectedFiles.length > 0"
-								fab
-								dark
-								small
-								color="primary"
-								@click="downloadSelectedZip"
-								v-bind="attrs"
-								v-on="on"
-							>
-								<v-icon>file_download</v-icon>
-							</v-btn>
-						</template>
-						<span>Download selected</span>
-					</v-tooltip>
-
-					<v-tooltip left>
-						<template v-slot:activator="{ on, attrs }">
-							<v-btn
-								v-if="selectedFiles.length > 0"
-								fab
-								dark
-								small
-								color="red"
-								@click="deleteSelected"
-								v-bind="attrs"
-								v-on="on"
-							>
-								<v-icon>delete</v-icon>
-							</v-btn>
-						</template>
-						<span>Delete selected</span>
-					</v-tooltip>
-				</v-speed-dial>
 			</v-col>
 
 			<v-divider class="mx-0" vertical></v-divider>
@@ -236,9 +114,9 @@
 			<v-col class="text-center overflow-y-auto d-flex justify-center">
 				<div
 					v-if="!selected || !selected.ext"
-					class="title grey--text text--lighten-1 font-weight-light align-self-center"
+					class="text-h6 text-grey-lighten-1 font-weight-light align-self-center"
 				>
-					<v-icon color="grey lighten-4" x-large>
+					<v-icon color="grey-lighten-4" size="x-large">
 						text_snippet
 					</v-icon>
 					<br />
@@ -246,7 +124,7 @@
 				</div>
 				<div
 					v-else-if="loadingFile"
-					class="title grey--text text--lighten-1 font-weight-light align-self-center"
+					class="text-h6 text-grey-lighten-1 font-weight-light align-self-center"
 				>
 					<v-progress-circular
 						indeterminate
@@ -268,36 +146,46 @@
 							:highlight="highlighter"
 						></prism-editor>
 					</div>
-					<div class="sticky-bottom pa-0" v-if="!notSupported">
+					<div class="sticky-bottom" v-if="!notSupported">
 						<v-toolbar>
 							<v-spacer></v-spacer>
 							<v-btn
-								color="purple darken-1"
-								text
+								color="purple"
+								variant="text"
 								@click="writeFile"
 							>
 								SAVE
-								<v-icon right dark>save</v-icon>
+								<v-icon end>save</v-icon>
 							</v-btn>
 							<v-btn
-								color="green darken-1"
-								text
+								color="success"
+								variant="text"
 								@click="downloadFile"
 							>
 								DOWNLOAD
-								<v-icon right dark>file_download</v-icon>
+								<v-icon end>file_download</v-icon>
 							</v-btn>
 						</v-toolbar>
 					</div>
 				</div>
 			</v-col>
 		</v-row>
+
+		<base-fab
+			v-model="fab"
+			style="margin-bottom: 65px"
+			location="bottom end"
+			icon-open="settings"
+			icon-close="close"
+			:items="fabItems"
+		/>
 	</v-container>
 </template>
 <style scoped>
-/* optional class for removing the outline */
+/* Custom focus indicator for better accessibility */
 .prism-editor-wrapper :deep(.prism-editor__textarea:focus) {
-	outline: none !important;
+	outline: 2px solid #1976d2 !important;
+	outline-offset: 2px;
 }
 
 .prism-editor-wrapper :deep(.prism-editor__editor) {
@@ -355,10 +243,10 @@ import { highlight, languages } from 'prismjs/components/prism-core'
 import 'prismjs/components/prism-clike'
 import 'prismjs/components/prism-javascript'
 import 'prismjs/themes/prism-tomorrow.css'
-import { mapActions } from 'pinia'
-import useBaseStore from '../stores/base.js'
 import logger from '../lib/logger.js'
 import InstancesMixin from '../mixins/InstancesMixin.js'
+import { defineAsyncComponent } from 'vue'
+import { download, extractFileNameFromResponse } from '../lib/utils.js'
 
 const log = logger.get('Store')
 
@@ -366,8 +254,12 @@ export default {
 	name: 'Store',
 	mixins: [InstancesMixin],
 	components: {
-		PrismEditor: () =>
+		BaseFab: defineAsyncComponent(
+			() => import('@/components/custom/BaseFab.vue'),
+		),
+		PrismEditor: defineAsyncComponent(() =>
 			import('vue-prism-editor').then((m) => m.PrismEditor),
+		),
 	},
 	watch: {
 		selected() {
@@ -382,6 +274,51 @@ export default {
 		},
 		storePath() {
 			return this.items[0]?.path
+		},
+		fabItems() {
+			const items = [
+				{
+					icon: 'restore',
+					color: 'success',
+					action: () => this.restoreZip(),
+					tooltip: 'Restore',
+				},
+				{
+					icon: 'upload',
+					color: 'warning',
+					action: () => this.uploadFile(),
+					tooltip: 'Upload File',
+				},
+				{
+					icon: 'backup',
+					color: 'purple',
+					action: () => this.backupStore(),
+					tooltip: 'Backup',
+				},
+				{
+					icon: 'refresh',
+					color: 'warning',
+					action: () => this.refreshTree(),
+					tooltip: 'Refresh',
+				},
+			]
+
+			if (this.selectedFiles.length > 0) {
+				items.push({
+					icon: 'file_download',
+					color: 'primary',
+					action: () => this.downloadSelectedZip(),
+					tooltip: 'Download selected',
+				})
+				items.push({
+					icon: 'delete',
+					color: 'error',
+					action: () => this.deleteSelected(),
+					tooltip: 'Delete selected',
+				})
+			}
+
+			return items
 		},
 	},
 	data() {
@@ -399,7 +336,6 @@ export default {
 		}
 	},
 	methods: {
-		...mapActions(useBaseStore, ['showSnackbar']),
 		async deleteFile(item) {
 			if (
 				await this.app.confirm(
@@ -461,10 +397,8 @@ export default {
 			}
 		},
 		async downloadZip(response, defaultName) {
-			const regExp = /filename="([^"]+){1}"/g
-			const fileName =
-				regExp.exec(response.headers['content-disposition'])[1] ||
-				defaultName
+			const fileName = extractFileNameFromResponse(response, defaultName)
+
 			if (window.navigator && window.navigator.msSaveOrOpenBlob) {
 				// IE variant
 				window.navigator.msSaveOrOpenBlob(
@@ -479,11 +413,7 @@ export default {
 						type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 					}),
 				)
-				const link = document.createElement('a')
-				link.href = url
-				link.setAttribute('download', fileName)
-				document.body.appendChild(link)
-				link.click()
+				download(url, fileName)
 			}
 		},
 		async downloadFile() {
@@ -699,6 +629,18 @@ export default {
 				this.loadingFile = false
 			}
 		},
+		async getFolderItems(folder) {
+			try {
+				const data = await ConfigApis.getFile(folder.path)
+				if (data.success) {
+					folder.children = data.data
+				} else {
+					throw Error(data.message)
+				}
+			} catch (error) {
+				this.showSnackbar(error.message, 'error')
+			}
+		},
 		async refreshTree(reset) {
 			try {
 				const data = await ConfigApis.getStore()
@@ -722,14 +664,11 @@ export default {
 			}
 
 			// open first level by default
-			if (this.openFolders.length === 0) {
-				this.openFolders.push(this.items[0])
-			}
+			this.openFolders = [this.items[0]]
 		},
 	},
 	async mounted() {
 		await this.refreshTree()
 	},
-	beforeDestroy() {},
 }
 </script>

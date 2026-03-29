@@ -1,29 +1,34 @@
-import express, { Request, RequestHandler, Response, Router } from 'express'
+import type { Request, RequestHandler, Response, Router } from 'express'
+import express from 'express'
 import history from 'connect-history-api-fallback'
 import cors from 'cors'
-import csrf from 'csurf'
+import compression from 'compression'
 import morgan from 'morgan'
-import store, { Settings, User } from './config/store'
-import Gateway, { GatewayConfig, GatewayType } from './lib/Gateway'
-import jsonStore from './lib/jsonStore'
-import * as loggers from './lib/logger'
-import MqttClient from './lib/MqttClient'
-import SocketManager from './lib/SocketManager'
-import ZWaveClient, { CallAPIResult, SensorTypeScale } from './lib/ZwaveClient'
+import type { Settings, User } from './config/store.ts'
+import store from './config/store.ts'
+import type { GatewayConfig } from './lib/Gateway.ts'
+import Gateway, { GatewayType } from './lib/Gateway.ts'
+import jsonStore from './lib/jsonStore.ts'
+import * as loggers from './lib/logger.ts'
+import { logContainer } from './lib/logger.ts'
+import MqttClient from './lib/MqttClient.ts'
+import SocketManager from './lib/SocketManager.ts'
+import type { CallAPIResult, ZwaveConfig } from './lib/ZwaveClient.ts'
+import ZWaveClient from './lib/ZwaveClient.ts'
 import multer, { diskStorage } from 'multer'
 import extract from 'extract-zip'
 import { serverVersion } from '@zwave-js/server'
 import archiver from 'archiver'
 import rateLimit from 'express-rate-limit'
 import session from 'express-session'
-import fs, { mkdirp, move, readdir, rm, stat } from 'fs-extra'
-import { createServer as createHttpServer, Server as HttpServer } from 'http'
-import { createServer as createHttpsServer } from 'https'
+import type { Server as HttpServer } from 'node:http'
+import { createServer as createHttpServer } from 'node:http'
+import { createServer as createHttpsServer } from 'node:https'
 import jwt from 'jsonwebtoken'
-import path from 'path'
+import path from 'node:path'
 import sessionStore from 'session-file-store'
-import { Socket } from 'socket.io'
-import { promisify } from 'util'
+import type { Socket } from 'socket.io'
+import { promisify } from 'node:util'
 import { Driver, libVersion } from 'zwave-js'
 import {
 	defaultPsw,
@@ -32,19 +37,38 @@ import {
 	snippetsDir,
 	storeDir,
 	tmpDir,
-} from './config/app'
+} from './config/app.ts'
+import type { CustomPlugin, PluginConstructor } from './lib/CustomPlugin.ts'
+import { createPlugin } from './lib/CustomPlugin.ts'
 import {
-	createPlugin,
-	CustomPlugin,
-	PluginConstructor,
-} from './lib/CustomPlugin'
-import { inboundEvents, socketEvents } from './lib/SocketEvents'
-import * as utils from './lib/utils'
-import backupManager from './lib/BackupManager'
-import { readFile, realpath } from 'fs/promises'
+	ALL_CHANNELS,
+	channelMap,
+	inboundEvents,
+	socketEvents,
+} from './lib/SocketEvents.ts'
+import * as utils from './lib/utils.ts'
+import backupManager from './lib/BackupManager.ts'
+import {
+	getExternallyManagedPaths,
+	loadExternalSettings,
+	mergeExternalSettings,
+} from './lib/externalSettings.ts'
+import {
+	readFile,
+	realpath,
+	readdir,
+	stat,
+	rm,
+	rename,
+	writeFile,
+	lstat,
+	mkdir,
+} from 'node:fs/promises'
 import { generate } from 'selfsigned'
-import ZnifferManager, { ZnifferConfig } from './lib/ZnifferManager'
+import type { ZnifferConfig } from './lib/ZnifferManager.ts'
+import ZnifferManager from './lib/ZnifferManager.ts'
 import { getAllNamedScaleGroups, getAllSensors } from '@zwave-js/core'
+import debugManager from './lib/DebugManager.ts'
 
 const createCertificate = promisify(generate)
 
@@ -62,7 +86,7 @@ function multerPromise(
 	return new Promise((resolve, reject) => {
 		m(req, res, (err: any) => {
 			if (err) {
-				reject(err)
+				reject(err as Error)
 			} else {
 				resolve()
 			}
@@ -72,7 +96,7 @@ function multerPromise(
 
 const Storage = diskStorage({
 	async destination(reqD, file, callback) {
-		await mkdirp(tmpDir)
+		await utils.ensureDir(tmpDir)
 		callback(null, tmpDir)
 	},
 	filename(reqF, file, callback) {
@@ -139,16 +163,14 @@ socketManager.authMiddleware = function (
 ) {
 	if (!isAuthEnabled()) {
 		next()
-	} else if (socket.handshake.query && socket.handshake.query.token) {
-		jwt.verify(
-			socket.handshake.query.token as string,
-			sessionSecret,
-			function (err, decoded: User) {
-				if (err) return next(new Error('Authentication error'))
-				socket.user = decoded
-				next()
-			},
-		)
+	} else if (socket.handshake.auth?.token || socket.handshake.query?.token) {
+		const token = (socket.handshake.auth?.token ||
+			socket.handshake.query.token) as string
+		jwt.verify(token, sessionSecret, function (err, decoded: User) {
+			if (err) return next(new Error('Authentication error'))
+			socket.user = decoded
+			next()
+		})
 	} else {
 		next(new Error('Authentication error'))
 	}
@@ -171,6 +193,12 @@ export async function startServer(port: number | string, host?: string) {
 	let server: HttpServer
 
 	const settings = jsonStore.get(store.settings)
+
+	// Merge external settings into zwave config (if external settings exist)
+	if (loadExternalSettings()) {
+		settings.zwave ??= {}
+		mergeExternalSettings(settings.zwave as Record<string, unknown>)
+	}
 
 	// as the really first thing setup loggers so all logs will go to file if specified in settings
 	setupLogging(settings)
@@ -255,6 +283,7 @@ export async function startServer(port: number | string, host?: string) {
 	setupInterceptor()
 	await loadSnippets()
 	startZniffer(settings.zniffer)
+	await debugManager.init() // Clean up any old debug temp files
 	await startGateway(settings)
 }
 
@@ -262,7 +291,7 @@ const defaultSnippets: utils.Snippet[] = []
 
 async function loadSnippets() {
 	const localSnippetsDir = utils.joinPath(false, 'snippets')
-	await mkdirp(snippetsDir)
+	await utils.ensureDir(snippetsDir)
 
 	const files = await readdir(localSnippetsDir)
 	for (const file of files) {
@@ -329,8 +358,8 @@ async function loadCertKey(): Promise<{
 	let cert: string
 
 	try {
-		cert = await fs.readFile(certFile, 'utf8')
-		key = await fs.readFile(keyFile, 'utf8')
+		cert = await readFile(certFile, 'utf8')
+		key = await readFile(keyFile, 'utf8')
 	} catch (error) {
 		// noop
 	}
@@ -349,8 +378,8 @@ async function loadCertKey(): Promise<{
 			key = result.private
 			cert = result.cert
 
-			await fs.writeFile(utils.joinPath(storeDir, 'key.pem'), key)
-			await fs.writeFile(utils.joinPath(storeDir, 'cert.pem'), cert)
+			await writeFile(utils.joinPath(storeDir, 'key.pem'), key)
+			await writeFile(utils.joinPath(storeDir, 'cert.pem'), cert)
 			logger.info('New cert and key created')
 		} catch (error) {
 			logger.error('Error creating cert and key for HTTPS', error)
@@ -405,9 +434,10 @@ async function startGateway(settings: Settings) {
 					app: pluginsRouter,
 					logger: loggers.module(pluginName),
 				}
+				const constructor = (await import(plugin))
+					.default as PluginConstructor
 				const instance = createPlugin(
-					// eslint-disable-next-line @typescript-eslint/no-var-requires
-					require(plugin) as PluginConstructor,
+					constructor,
 					pluginsContext,
 					pluginName,
 				)
@@ -442,26 +472,26 @@ async function destroyPlugins() {
 function setupInterceptor() {
 	// intercept logs and redirect them to socket
 	loggers.logStream.on('data', (chunk) => {
-		socketManager.io.emit(socketEvents.debug, chunk.toString())
+		socketManager.io.to('debug').emit(socketEvents.debug, chunk.toString())
 	})
 }
 
 async function parseDir(dir: string): Promise<StoreFileEntry[]> {
 	const toReturn = []
-	const files = await fs.readdir(dir)
+	const files = await readdir(dir)
 	for (const file of files) {
 		try {
 			const entry: StoreFileEntry = {
 				name: path.basename(file),
 				path: utils.joinPath(dir, file),
 			}
-			const stats = await fs.lstat(entry.path)
+			const stats = await lstat(entry.path)
 			if (stats.isDirectory()) {
 				if (entry.path === process.env.ZWAVEJS_EXTERNAL_CONFIG) {
 					// hide config-db
 					continue
 				}
-				entry.children = await parseDir(entry.path)
+				entry.children = []
 				sortStore(entry.children)
 			} else {
 				entry.ext = file.split('.').pop()
@@ -499,6 +529,7 @@ function sortStore(store: StoreFileEntry[]) {
 
 logger.info(`Version: ${utils.getVersion()}`)
 logger.info('Application path:' + utils.getPath(true))
+logger.info('Store path:' + storeDir)
 
 if (process.env.TRUST_PROXY) {
 	app.set(
@@ -508,9 +539,19 @@ if (process.env.TRUST_PROXY) {
 }
 
 app.use(
-	morgan(loggers.disableColors ? 'tiny' : 'dev', {
-		stream: { write: (msg: string) => logger.info(msg.trimEnd()) },
-	}) as RequestHandler,
+	morgan(
+		':remote-addr :method :url :status :res[content-length] - :response-time ms',
+		{
+			stream: { write: (msg: string) => logger.info(msg.trimEnd()) },
+		},
+	) as RequestHandler,
+)
+// Enable compression for all responses
+app.use(
+	compression({
+		threshold: 1024, // Only compress responses larger than 1KB
+		level: 6, // Balanced compression level (0-9, higher = more compression but slower)
+	}),
 )
 app.use(express.json({ limit: '50mb' }) as RequestHandler)
 app.use(
@@ -531,6 +572,7 @@ app.use(function (req, res, next) {
 })
 
 app.use(
+	// @ts-expect-error types not matching
 	history({
 		index: '/',
 	}),
@@ -588,15 +630,8 @@ app.use(
 	}),
 )
 
-// Node.js CSRF protection middleware.
-// Requires either a session middleware or cookie-parser to be initialized first.
-const csrfProtection = csrf({
-	value: (req) => req.csrfToken(),
-})
-
 // ### SOCKET SETUP
 
-// eslint-disable-next-line @typescript-eslint/no-empty-function
 const noop = () => {}
 
 /**
@@ -619,12 +654,15 @@ function setupSocket(server: HttpServer) {
 				state.zniffer = zniffer.status()
 			}
 
+			// Add debug session status
+			state.debugCaptureActive = debugManager.isSessionActive()
+
 			cb(state)
 		})
 
 		socket.on(
 			inboundEvents.zwave,
-			// eslint-disable-next-line @typescript-eslint/no-misused-promises
+
 			async (data, cb = noop) => {
 				if (gw.zwave) {
 					if (!data.args) data.args = []
@@ -642,7 +680,6 @@ function setupSocket(server: HttpServer) {
 			},
 		)
 
-		// eslint-disable-next-line @typescript-eslint/no-misused-promises
 		socket.on(inboundEvents.mqtt, (data, cb = noop) => {
 			logger.info(`Mqtt api call: ${data.api}`)
 
@@ -674,7 +711,6 @@ function setupSocket(server: HttpServer) {
 			cb(result)
 		})
 
-		// eslint-disable-next-line @typescript-eslint/no-misused-promises
 		socket.on(inboundEvents.hass, async (data, cb = noop) => {
 			logger.info(`Hass api call: ${data.apiName}`)
 
@@ -728,7 +764,46 @@ function setupSocket(server: HttpServer) {
 			cb(result)
 		})
 
-		// eslint-disable-next-line @typescript-eslint/no-misused-promises
+		socket.on(inboundEvents.subscribe, async (data, cb = noop) => {
+			const channels: string[] = Array.isArray(data?.channels)
+				? data.channels.filter((c: unknown) => typeof c === 'string')
+				: []
+
+			const isAll = channels.includes('all')
+			const validChannels = isAll
+				? ALL_CHANNELS
+				: channels.filter((c) => Object.hasOwn(channelMap, c))
+
+			for (const channel of validChannels) {
+				await socket.join(channel)
+			}
+
+			// report current subscriptions (exclude socket's auto-joined room)
+			const subscribed = [...socket.rooms].filter(
+				(r) => r !== socket.id && Object.hasOwn(channelMap, r),
+			)
+			cb({ channels: subscribed })
+		})
+
+		socket.on(inboundEvents.unsubscribe, async (data, cb = noop) => {
+			const channels: string[] = Array.isArray(data?.channels)
+				? data.channels.filter((c: unknown) => typeof c === 'string')
+				: []
+
+			const validChannels = channels.filter((c) =>
+				Object.hasOwn(channelMap, c),
+			)
+
+			for (const channel of validChannels) {
+				await socket.leave(channel)
+			}
+
+			const subscribed = [...socket.rooms].filter(
+				(r) => r !== socket.id && Object.hasOwn(channelMap, r),
+			)
+			cb({ channels: subscribed })
+		})
+
 		socket.on(inboundEvents.zniffer, async (data, cb = noop) => {
 			logger.info(`Zniffer api call: ${data.api}`)
 
@@ -750,15 +825,25 @@ function setupSocket(server: HttpServer) {
 					case 'setFrequency':
 						res = await zniffer.setFrequency(data.frequency)
 						break
+					case 'setLRChannelConfig':
+						res = await zniffer.setLRChannelConfig(
+							data.channelConfig,
+						)
+						break
 					case 'saveCaptureToFile':
 						res = await zniffer.saveCaptureToFile()
 						break
+					case 'loadCaptureFromBuffer': {
+						const buffer = Buffer.from(data.buffer)
+						res = zniffer.loadCaptureFromBuffer(buffer)
+						break
+					}
 					default:
 						throw new Error(`Unknown ZNIFFER api ${data.apiName}`)
 				}
 			} catch (error) {
 				logger.error('Error while calling ZNIFFER api', error)
-				err = error.message
+				err = (error as Error).message
 			}
 
 			const result = {
@@ -846,89 +931,81 @@ app.get('/api/auth-enabled', apisLimiter, function (req, res) {
 })
 
 // api to authenticate user
-app.post(
-	'/api/authenticate',
-	loginLimiter,
-	csrfProtection,
-	async function (req, res) {
-		const token = req.body.token
-		let user: User
+app.post('/api/authenticate', loginLimiter, async function (req, res) {
+	const token = req.body.token
+	let user: User
 
-		try {
-			// token auth, mostly used to restore sessions when user refresh the page
-			if (token) {
-				const decoded = await verifyJWT(token, sessionSecret)
+	try {
+		// token auth, mostly used to restore sessions when user refresh the page
+		if (token) {
+			const decoded = await verifyJWT(token, sessionSecret)
 
-				// Successfully authenticated, token is valid and the user _id of its content
-				// is the same of the current session
-				const users = jsonStore.get(store.users) as User[]
+			// Successfully authenticated, token is valid and the user _id of its content
+			// is the same of the current session
+			const users = jsonStore.get(store.users) as User[]
 
-				user = users.find((u) => u.username === decoded.username)
-			} else {
-				// credentials auth
-				const users = jsonStore.get(store.users) as User[]
+			user = users.find((u) => u.username === decoded.username)
+		} else {
+			// credentials auth
+			const users = jsonStore.get(store.users) as User[]
 
-				const username = req.body.username
-				const password = req.body.password
+			const username = req.body.username
+			const password = req.body.password
 
-				user = users.find((u) => u.username === username)
+			user = users.find((u) => u.username === username)
 
-				if (
-					user &&
-					!(await utils.verifyPsw(password, user.passwordHash))
-				) {
-					user = null
-				}
+			if (user && !(await utils.verifyPsw(password, user.passwordHash))) {
+				user = null
 			}
+		}
 
-			const result = {
-				success: !!user,
-				code: undefined,
-				message: '',
-				user: undefined,
-			}
+		const result = {
+			success: !!user,
+			code: undefined,
+			message: '',
+			user: undefined,
+		}
 
-			if (result.success) {
-				// don't edit the original user object, remove the password from jwt payload
-				const userData: User = Object.assign({}, user)
-				delete userData.passwordHash
+		if (result.success) {
+			// don't edit the original user object, remove the password from jwt payload
+			const userData: User = Object.assign({}, user)
+			delete userData.passwordHash
 
-				const token = jwt.sign(userData, sessionSecret, {
-					expiresIn: '1d',
-				})
-				userData.token = token
-				req.session.user = userData
-				result.user = userData
-				loginLimiter.resetKey(req.ip)
-				logger.info(
-					`User ${user.username} logged in successfully from ${req.ip}`,
-				)
-			} else {
-				result.code = 3
-				result.message = RESPONSE_CODES.GENERAL_ERROR
-				logger.error(
-					`User ${
-						user?.username || req.body.username
-					} failed to login from ${req.ip}: wrong credentials`,
-				)
-			}
-
-			res.json(result)
-		} catch (error) {
-			res.json({
-				success: false,
-				message: 'Authentication failed',
-				code: 3,
+			const token = jwt.sign(userData, sessionSecret, {
+				expiresIn: '1d',
 			})
-
+			userData.token = token
+			req.session.user = userData
+			result.user = userData
+			loginLimiter.resetKey(req.ip)
+			logger.info(
+				`User ${user.username} logged in successfully from ${req.ip}`,
+			)
+		} else {
+			result.code = 3
+			result.message = RESPONSE_CODES.GENERAL_ERROR
 			logger.error(
 				`User ${
 					user?.username || req.body.username
-				} failed to login from ${req.ip}: ${error.message}`,
+				} failed to login from ${req.ip}: wrong credentials`,
 			)
 		}
-	},
-)
+
+		res.json(result)
+	} catch (error) {
+		res.json({
+			success: false,
+			message: 'Authentication failed',
+			code: 3,
+		})
+
+		logger.error(
+			`User ${
+				user?.username || req.body.username
+			} failed to login from ${req.ip}: ${error.message}`,
+		)
+	}
+})
 
 // logout the user
 app.get('/api/logout', apisLimiter, isAuthenticated, function (req, res) {
@@ -945,7 +1022,6 @@ app.get('/api/logout', apisLimiter, isAuthenticated, function (req, res) {
 app.put(
 	'/api/password',
 	apisLimiter,
-	csrfProtection,
 	isAuthenticated,
 	async function (req, res) {
 		try {
@@ -1037,66 +1113,83 @@ app.get('/version', apisLimiter, function (req, res) {
 })
 
 // get settings
+app.get('/api/settings', apisLimiter, isAuthenticated, function (req, res) {
+	const allSensors = getAllSensors()
+	const namedScaleGroups = getAllNamedScaleGroups()
+
+	const scales: ZwaveConfig['scales'] = []
+
+	for (const group of namedScaleGroups) {
+		for (const scale of Object.values(group.scales)) {
+			scales.push({
+				key: group.name,
+				sensor: group.name,
+				unit: scale.unit,
+				label: scale.label,
+				description: scale.description,
+			})
+		}
+	}
+
+	for (const sensor of allSensors) {
+		for (const scale of Object.values(sensor.scales)) {
+			scales.push({
+				key: sensor.key,
+				sensor: sensor.label,
+				label: scale.label,
+				unit: scale.unit,
+				description: scale.description,
+			})
+		}
+	}
+
+	const settings = jsonStore.get(store.settings)
+
+	const managedExternally: string[] = []
+	if (process.env.ZWAVE_PORT) {
+		managedExternally.push('zwave.port')
+		managedExternally.push('zwave.enabled')
+	}
+	// Add paths from external settings file
+	managedExternally.push(...getExternallyManagedPaths())
+
+	const data = {
+		success: true,
+		settings,
+		devices: gw?.zwave?.devices ?? {},
+		scales: scales,
+		sslDisabled: sslDisabled(),
+		managedExternally,
+		tz: process.env.TZ,
+		locale: process.env.LOCALE,
+		deprecationWarning: process.env.TAG_NAME === 'zwavejs2mqtt',
+	}
+
+	res.json(data)
+})
+
+// get serial ports
 app.get(
-	'/api/settings',
+	'/api/serial-ports',
 	apisLimiter,
 	isAuthenticated,
 	async function (req, res) {
-		const allSensors = getAllSensors()
-		const namedScaleGroups = getAllNamedScaleGroups()
+		let serial_ports = []
 
-		const scales: SensorTypeScale[] = []
-
-		for (const group of namedScaleGroups) {
-			for (const scale of Object.values(group.scales)) {
-				scales.push({
-					key: group.name,
-					sensor: group.name,
-					unit: scale.unit,
-					label: scale.label,
-					description: scale.description,
-				})
-			}
-		}
-
-		for (const sensor of allSensors) {
-			for (const scale of Object.values(sensor.scales)) {
-				scales.push({
-					key: sensor.key,
-					sensor: sensor.label,
-					label: scale.label,
-					unit: scale.unit,
-					description: scale.description,
-				})
-			}
-		}
-
-		const settings = jsonStore.get(store.settings)
-
-		const data = {
-			success: true,
-			settings,
-			devices: gw?.zwave?.devices ?? {},
-			serial_ports: [],
-			scales: scales,
-			sslDisabled: sslDisabled(),
-			tz: process.env.TZ,
-			locale: process.env.LOCALE,
-			deprecationWarning: process.env.TAG_NAME === 'zwavejs2mqtt',
-		}
-
-		if (process.platform !== 'sunos') {
+		// Only enumerate serial ports if ZWAVE_PORT is not set via env var
+		if (process.platform !== 'sunos' && !process.env.ZWAVE_PORT) {
 			try {
-				data.serial_ports = await Driver.enumerateSerialPorts({
+				serial_ports = await Driver.enumerateSerialPorts({
 					local: true,
 					remote: true,
 				})
 			} catch (error) {
 				logger.error(error)
-				data.serial_ports = []
+				return res.json({ success: false, serial_ports })
 			}
-			res.json(data)
-		} else res.json(data)
+		}
+
+		res.json({ success: true, serial_ports })
 	},
 )
 
@@ -1114,66 +1207,252 @@ app.post(
 			}
 			let settings = req.body
 
-			let restartAll = false
+			let shouldRestart = false
 			let shouldRestartGw = false
 			let shouldRestartZniffer = false
+			let canUpdateZwaveOptions = false
 
 			const actualSettings = jsonStore.get(store.settings) as Settings
 
 			// TODO: validate settings using calss-validator
 			// when settings is null consider a force restart
 			if (settings && Object.keys(settings).length > 0) {
-				shouldRestartGw = !utils.deepEqual(
-					{
-						zwave: actualSettings.zwave,
-						gateway: actualSettings.gateway,
-						mqtt: actualSettings.mqtt,
-					},
-					{
-						zwave: settings.zwave,
-						gateway: settings.gateway,
-						mqtt: settings.mqtt,
-					},
+				// Check if gateway settings changed
+				const gatewayChanged = !utils.deepEqual(
+					actualSettings.gateway,
+					settings.gateway,
+				)
+				const mqttChanged = !utils.deepEqual(
+					actualSettings.mqtt,
+					settings.mqtt,
 				)
 
+				if (gatewayChanged || mqttChanged) {
+					shouldRestartGw = true
+					shouldRestart = true
+				}
+
+				let changedZwaveKeys: string[] = []
+
+				// Check if Z-Wave settings changed
+				if (!utils.deepEqual(actualSettings.zwave, settings.zwave)) {
+					// These are ZwaveClient configuration properties that map to
+					// driver.updateOptions() parameters. The commented names show
+					// the corresponding driver option keys:
+					// - 'scales' maps to 'preferences.scales'
+					// - 'logEnabled', 'logLevel', etc. map to 'logConfig' properties
+					// - 'disableOptimisticValueUpdate' maps directly
+					const editableZWaveSettings = [
+						'disableOptimisticValueUpdate',
+						// preferences
+						'scales',
+						// logConfig
+						'logEnabled',
+						'logLevel',
+						'logToFile',
+						'maxFiles',
+						'nodeFilter',
+					]
+
+					// Find which Z-Wave settings actually changed
+					// Only check keys that exist in actual settings to avoid detecting
+					// new default properties added by the UI as "changed"
+					const allKeys = new Set([
+						...Object.keys(actualSettings.zwave || {}),
+						...Object.keys(settings.zwave || {}),
+					])
+					changedZwaveKeys = Array.from(allKeys).filter((key) => {
+						return !utils.deepEqual(
+							actualSettings.zwave?.[key],
+							settings.zwave?.[key],
+						)
+					})
+
+					logger.log('debug', 'Z-Wave settings changed: %o', {
+						changedKeys: changedZwaveKeys,
+						hasDriver: !!gw?.zwave?.driver,
+					})
+
+					// Check if only editable options changed
+					const onlyEditableChanged = changedZwaveKeys.every((key) =>
+						editableZWaveSettings.includes(key),
+					)
+
+					logger.log(
+						'debug',
+						'Checking if can update without restart: %o',
+						{
+							onlyEditableChanged,
+							changedKeysLength: changedZwaveKeys.length,
+							hasDriver: !!gw?.zwave?.driver,
+						},
+					)
+
+					if (
+						onlyEditableChanged &&
+						changedZwaveKeys.length > 0 &&
+						gw?.zwave?.driver
+					) {
+						// Can update options without restart
+						canUpdateZwaveOptions = true
+						logger.info(
+							'Z-Wave settings can be updated without restart',
+						)
+					} else {
+						// Need full restart
+						shouldRestartGw = true
+						shouldRestart = true
+						logger.info('Z-Wave settings require full restart', {
+							reason: !onlyEditableChanged
+								? 'non-editable settings changed'
+								: changedZwaveKeys.length === 0
+									? 'no keys changed'
+									: 'driver not available',
+						})
+					}
+				}
+
+				// Check if Zniffer settings changed
 				shouldRestartZniffer = !utils.deepEqual(
 					actualSettings.zniffer,
 					settings.zniffer,
 				)
-
-				// nothing changed, consider it a forced restart
-				restartAll = !shouldRestartGw && !shouldRestartZniffer
-
-				await jsonStore.put(store.settings, settings)
-			} else {
-				restartAll = true
-				settings = actualSettings
-			}
-
-			if (restartAll || shouldRestartGw) {
-				restarting = true
-
-				await gw.close()
-
-				await destroyPlugins()
-				// reload loggers settings
-				setupLogging(settings)
-				// restart clients and gateway
-				await startGateway(settings)
-				backupManager.init(gw.zwave)
-			}
-
-			if (restartAll || shouldRestartZniffer) {
-				if (zniffer) {
-					await zniffer.close()
+				if (shouldRestartZniffer) {
+					shouldRestart = true
 				}
-				startZniffer(settings.zniffer)
+
+				// Save settings to file
+				await jsonStore.put(store.settings, settings)
+
+				// Update driver options if only editable options changed
+				if (canUpdateZwaveOptions && gw?.zwave?.driver) {
+					try {
+						// Build editable options object with only changed properties
+						// Map our settings to PartialZWaveOptions format
+						const editableOptions: any = {}
+
+						// Check disableOptimisticValueUpdate
+						if (
+							changedZwaveKeys.includes(
+								'disableOptimisticValueUpdate',
+							) &&
+							settings.zwave?.disableOptimisticValueUpdate !==
+								undefined
+						) {
+							editableOptions.disableOptimisticValueUpdate =
+								settings.zwave.disableOptimisticValueUpdate
+						}
+
+						// Check scales (maps to preferences.scales)
+						if (
+							changedZwaveKeys.includes('scales') &&
+							settings.zwave?.scales !== undefined
+						) {
+							const preferences = utils.buildPreferences(
+								settings.zwave || {},
+							)
+							if (preferences) {
+								editableOptions.preferences = preferences
+							}
+						}
+
+						// Check logConfig properties
+						const logConfigChanged =
+							[
+								'logEnabled',
+								'logLevel',
+								'logToFile',
+								'maxFiles',
+								'nodeFilter',
+							].filter((key) => {
+								return (
+									changedZwaveKeys.includes(key) &&
+									settings.zwave?.[key] !== undefined
+								)
+							}).length > 0
+
+						if (logConfigChanged) {
+							// Build logConfig object from our settings
+							editableOptions.logConfig = utils.buildLogConfig(
+								settings.zwave || {},
+							)
+						}
+
+						if (Object.keys(editableOptions).length > 0) {
+							gw.zwave.driver.updateOptions(editableOptions)
+							logger.info(
+								'Updated Z-Wave driver options without restart:',
+								Object.keys(editableOptions).join(', '),
+							)
+						}
+					} catch (error) {
+						logger.error('Error updating driver options', error)
+						// If update fails, require restart
+						shouldRestart = true
+						shouldRestartGw = true
+					}
+				}
+			} else {
+				// Force restart if no settings provided
+				shouldRestart = true
+				settings = actualSettings
 			}
 
 			res.json({
 				success: true,
-				message: 'Configuration updated successfully',
+				message: shouldRestart
+					? 'Configuration saved. Restart required to apply changes.'
+					: 'Configuration updated successfully',
 				data: settings,
+				shouldRestart,
+			})
+		} catch (error) {
+			restarting = false
+			logger.error(error)
+			res.json({ success: false, message: error.message })
+		}
+	},
+)
+
+// restart gateway
+app.post(
+	'/api/restart',
+	apisLimiter,
+	isAuthenticated,
+	async function (req, res) {
+		try {
+			if (restarting) {
+				throw Error(
+					'Gateway is already restarting, wait a moment before doing another request',
+				)
+			}
+
+			const settings = jsonStore.get(store.settings) as Settings
+
+			restarting = true
+
+			if (debugManager.isSessionActive()) {
+				await debugManager.cancelSession()
+			}
+
+			// Close gateway and restart
+			await gw.close()
+			await destroyPlugins()
+			if (settings.gateway) {
+				setupLogging({ gateway: settings.gateway })
+			}
+			await startGateway(settings)
+			backupManager.init(gw.zwave)
+
+			// Restart Zniffer if enabled
+			if (zniffer) {
+				await zniffer.close()
+			}
+			startZniffer(settings.zniffer)
+
+			res.json({
+				success: true,
+				message: 'Gateway restarted successfully',
 			})
 		} catch (error) {
 			restarting = false
@@ -1343,6 +1622,222 @@ app.post(
 	},
 )
 
+// -------- Configuration Templates API --------
+
+// get all configuration templates
+app.get(
+	'/api/configuration-templates',
+	apisLimiter,
+	isAuthenticated,
+	function (req, res) {
+		try {
+			const templates = gw.zwave.getConfigurationTemplates()
+			res.json({ success: true, data: templates })
+		} catch (error) {
+			res.json({ success: false, message: error.message })
+		}
+	},
+)
+
+// create a configuration template from a node
+app.post(
+	'/api/configuration-templates',
+	apisLimiter,
+	isAuthenticated,
+	async function (req, res) {
+		try {
+			const { nodeId, name, autoApply, values, firmwareRange } = req.body
+			if (!nodeId || !name) {
+				return res.json({
+					success: false,
+					message: 'nodeId and name are required',
+				})
+			}
+			const template = await gw.zwave.createConfigurationTemplate(
+				nodeId,
+				name,
+				autoApply,
+				values,
+				firmwareRange,
+			)
+			res.json({
+				success: true,
+				data: template,
+				message: 'Template created successfully',
+			})
+		} catch (error) {
+			res.json({ success: false, message: error.message })
+		}
+	},
+)
+
+// export all configuration templates (must be before :id routes)
+app.get(
+	'/api/configuration-templates/export',
+	apisLimiter,
+	isAuthenticated,
+	function (req, res) {
+		try {
+			const templates = gw.zwave.getConfigurationTemplates()
+			res.json({
+				success: true,
+				data: templates,
+				message: 'Templates exported successfully',
+			})
+		} catch (error) {
+			res.json({ success: false, message: error.message })
+		}
+	},
+)
+
+// import configuration templates (must be before :id routes)
+app.post(
+	'/api/configuration-templates/import',
+	apisLimiter,
+	isAuthenticated,
+	async function (req, res) {
+		try {
+			const templates = req.body.data
+			if (!Array.isArray(templates)) {
+				return res.json({
+					success: false,
+					message: 'data must be an array of templates',
+				})
+			}
+			// Validate each template has required fields
+			for (const t of templates) {
+				if (!t.name || !t.deviceId || !Array.isArray(t.values)) {
+					return res.json({
+						success: false,
+						message:
+							'Each template must have name, deviceId, and values array',
+					})
+				}
+			}
+			const result =
+				await gw.zwave.importConfigurationTemplates(templates)
+			res.json({
+				success: true,
+				data: result,
+				message: 'Templates imported successfully',
+			})
+		} catch (error) {
+			res.json({ success: false, message: error.message })
+		}
+	},
+)
+
+// get device configuration params from zwave-js config DB
+app.get(
+	'/api/configuration-templates/device-params/:deviceId',
+	apisLimiter,
+	isAuthenticated,
+	async function (req, res) {
+		try {
+			const params = await gw.zwave.getDeviceConfigurationParams(
+				req.params.deviceId,
+			)
+			res.json({ success: true, data: params })
+		} catch (error) {
+			res.json({ success: false, message: error.message })
+		}
+	},
+)
+
+// update a configuration template
+app.put(
+	'/api/configuration-templates/:id',
+	apisLimiter,
+	isAuthenticated,
+	async function (req, res) {
+		try {
+			const id = req.params.id
+			if (!id) {
+				return res.json({
+					success: false,
+					message: 'Invalid template ID',
+				})
+			}
+			const { name, autoApply, firmwareRange, values } = req.body
+			const template = await gw.zwave.updateConfigurationTemplate(id, {
+				name,
+				autoApply,
+				firmwareRange,
+				values,
+			})
+			res.json({
+				success: true,
+				data: template,
+				message: 'Template updated successfully',
+			})
+		} catch (error) {
+			res.json({ success: false, message: error.message })
+		}
+	},
+)
+
+// delete a configuration template
+app.delete(
+	'/api/configuration-templates/:id',
+	apisLimiter,
+	isAuthenticated,
+	async function (req, res) {
+		try {
+			const id = req.params.id
+			if (!id) {
+				return res.json({
+					success: false,
+					message: 'Invalid template ID',
+				})
+			}
+			await gw.zwave.deleteConfigurationTemplate(id)
+			res.json({
+				success: true,
+				message: 'Template deleted successfully',
+			})
+		} catch (error) {
+			res.json({ success: false, message: error.message })
+		}
+	},
+)
+
+// apply a configuration template to a node
+app.post(
+	'/api/configuration-templates/:id/apply',
+	apisLimiter,
+	isAuthenticated,
+	async function (req, res) {
+		try {
+			const id = req.params.id
+			if (!id) {
+				return res.json({
+					success: false,
+					message: 'Invalid template ID',
+				})
+			}
+			const { nodeId, force } = req.body
+			if (!nodeId) {
+				return res.json({
+					success: false,
+					message: 'nodeId is required',
+				})
+			}
+			const result = await gw.zwave.applyConfigurationTemplate(
+				id,
+				nodeId,
+				!!force,
+			)
+			res.json({
+				success: true,
+				data: result,
+				message: `Template applied: ${result.success} OK, ${result.failed} failed`,
+			})
+		} catch (error) {
+			res.json({ success: false, message: error.message })
+		}
+	},
+)
+
 interface StoreFileEntry {
 	children?: StoreFileEntry[]
 	name: string
@@ -1359,20 +1854,22 @@ app.get('/api/store', storeLimiter, isAuthenticated, async function (req, res) {
 		if (req.query.path) {
 			const reqPath = getSafePath(req)
 			// lgtm [js/path-injection]
-			let stat = await fs.lstat(reqPath)
+			let stat = await lstat(reqPath)
 
 			// check symlink is secure
 			if (stat.isSymbolicLink()) {
 				const realPath = await realpath(reqPath)
 				getSafePath(realPath)
-				stat = await fs.lstat(realPath)
+				stat = await lstat(realPath)
 			}
 
 			if (stat.isFile()) {
 				// lgtm [js/path-injection]
-				data = await fs.readFile(reqPath, 'utf8')
+				data = await readFile(reqPath, 'utf8')
 			} else {
-				throw Error('Path is not a file')
+				// read directory
+				// lgtm [js/path-injection]
+				data = await parseDir(reqPath)
 			}
 		} else {
 			data = [
@@ -1401,7 +1898,7 @@ app.put('/api/store', storeLimiter, isAuthenticated, async function (req, res) {
 
 		if (!isNew) {
 			// lgtm [js/path-injection]
-			const stat = await fs.lstat(reqPath)
+			const stat = await lstat(reqPath)
 
 			if (!stat.isFile()) {
 				throw Error('Path is not a file')
@@ -1410,10 +1907,10 @@ app.put('/api/store', storeLimiter, isAuthenticated, async function (req, res) {
 
 		if (!isDirectory) {
 			// lgtm [js/path-injection]
-			await fs.writeFile(reqPath, req.body.content, 'utf8')
+			await writeFile(reqPath, req.body.content, 'utf8')
 		} else {
 			// lgtm [js/path-injection]
-			await fs.mkdir(reqPath)
+			await mkdir(reqPath)
 		}
 
 		res.json({ success: true })
@@ -1432,7 +1929,7 @@ app.delete(
 			const reqPath = getSafePath(req)
 
 			// lgtm [js/path-injection]
-			await fs.remove(reqPath)
+			await rm(reqPath, { recursive: true, force: true })
 
 			res.json({ success: true })
 		} catch (error) {
@@ -1450,7 +1947,7 @@ app.put(
 		try {
 			const files = req.body.files || []
 			for (const f of files) {
-				await fs.remove(f)
+				await rm(f, { recursive: true, force: true })
 			}
 			res.json({ success: true })
 		} catch (error) {
@@ -1488,7 +1985,7 @@ app.post(
 		archive.pipe(res)
 
 		for (const f of files) {
-			const s = await fs.lstat(f)
+			const s = await lstat(f)
 			const name = f.replace(storeDir, '')
 			if (s.isFile()) {
 				archive.file(f, { name })
@@ -1549,7 +2046,7 @@ app.post(
 				const destinationPath = getSafePath(
 					path.join(storeDir, folder, file.originalname),
 				)
-				await move(file.path, destinationPath)
+				await rename(file.path, destinationPath)
 			}
 
 			res.json({ success: true })
@@ -1571,6 +2068,118 @@ app.get('/api/snippet', apisLimiter, async function (req, res) {
 		res.json({ success: false, message: err.message })
 	}
 })
+
+// Debug capture endpoints
+app.get('/api/debug/status', apisLimiter, isAuthenticated, function (req, res) {
+	res.json({
+		success: true,
+		active: debugManager.isSessionActive(),
+	})
+})
+
+app.post(
+	'/api/debug/start',
+	apisLimiter,
+	isAuthenticated,
+	async function (req, res) {
+		try {
+			if (debugManager.isSessionActive()) {
+				return res.json({
+					success: false,
+					message: 'A debug session is already active',
+				})
+			}
+
+			const settings: Settings =
+				jsonStore.get(store.settings) || ({} as Settings)
+			const originalLogLevel = settings.gateway?.logLevel || 'info'
+			const restartDriver = req.body.restartDriver || false
+
+			await debugManager.startSession(
+				gw.zwave,
+				originalLogLevel,
+				restartDriver,
+			)
+
+			res.json({
+				success: true,
+				message: 'Debug capture started',
+			})
+		} catch (err) {
+			logger.error('Error starting debug session:', err)
+			res.json({
+				success: false,
+				message: err.message,
+			})
+		}
+	},
+)
+
+app.post(
+	'/api/debug/stop',
+	apisLimiter,
+	isAuthenticated,
+	async function (req, res) {
+		try {
+			if (!debugManager.isSessionActive()) {
+				return res.json({
+					success: false,
+					message: 'No active debug session',
+				})
+			}
+
+			const nodeIds: number[] = req.body.nodeIds || []
+
+			const { archive, cleanup } = await debugManager.stopSession(nodeIds)
+
+			const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+			res.attachment(`zwave-debug-${timestamp}.zip`)
+			res.setHeader('Content-Type', 'application/zip')
+
+			// Clean up temp files after the archive has been sent
+			archive.on('end', async () => {
+				await cleanup()
+			})
+
+			archive.pipe(res)
+		} catch (err) {
+			logger.error('Error stopping debug session:', err)
+			res.json({
+				success: false,
+				message: err.message,
+			})
+		}
+	},
+)
+
+app.post(
+	'/api/debug/cancel',
+	apisLimiter,
+	isAuthenticated,
+	async function (req, res) {
+		try {
+			if (!debugManager.isSessionActive()) {
+				return res.json({
+					success: false,
+					message: 'No active debug session',
+				})
+			}
+
+			await debugManager.cancelSession()
+
+			res.json({
+				success: true,
+				message: 'Debug capture cancelled',
+			})
+		} catch (err) {
+			logger.error('Error cancelling debug session:', err)
+			res.json({
+				success: false,
+				message: err.message,
+			})
+		}
+	},
+)
 
 // ### ERROR HANDLERS
 
@@ -1613,13 +2222,11 @@ async function gracefuShutdown() {
 process.on('uncaughtException', (reason) => {
 	const stack = (reason as any).stack || ''
 	logger.error(
-		// eslint-disable-next-line @typescript-eslint/no-base-to-string
 		`Unhandled Rejection, reason: ${reason}${stack ? `\n${stack}` : ''}`,
 	)
 })
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
-	// eslint-disable-next-line @typescript-eslint/no-misused-promises
 	process.once(signal as NodeJS.Signals, gracefuShutdown)
 }
 

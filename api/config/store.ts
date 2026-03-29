@@ -1,11 +1,17 @@
 // config/store.js
 
-import { GatewayConfig } from '../lib/Gateway'
-import { MqttConfig } from '../lib/MqttClient'
-import { ZnifferConfig } from '../lib/ZnifferManager'
-import { ZwaveConfig, deviceConfigPriorityDir } from '../lib/ZwaveClient'
+import type { GatewayConfig } from '../lib/Gateway.ts'
+import type { MqttConfig } from '../lib/MqttClient.ts'
+import type { ZnifferConfig } from '../lib/ZnifferManager.ts'
+import type { ZwaveConfig } from '../lib/ZwaveClient.ts'
+import { deviceConfigPriorityDir } from '../lib/Constants.ts'
 
-export type StoreKeys = 'settings' | 'scenes' | 'nodes' | 'users'
+export type StoreKeys =
+	| 'settings'
+	| 'scenes'
+	| 'nodes'
+	| 'users'
+	| 'configurationTemplates'
 
 export interface StoreFile {
 	file: string
@@ -18,11 +24,21 @@ export interface User {
 	token?: string
 }
 
+export interface UiConfig {
+	colorScheme?: string
+	navTabs?: boolean
+	showTabLabels?: boolean
+	compactMode?: boolean
+	streamerMode?: boolean
+	browserTitle?: string
+}
+
 export interface Settings {
 	mqtt?: MqttConfig
 	zwave?: ZwaveConfig
 	gateway?: GatewayConfig
 	zniffer?: ZnifferConfig
+	ui?: UiConfig
 }
 
 const store: Record<StoreKeys, StoreFile> = {
@@ -33,11 +49,15 @@ const store: Record<StoreKeys, StoreFile> = {
 				deviceConfigPriorityDir,
 				enableSoftReset: true,
 			},
-		},
+		} satisfies Settings,
 	},
 	scenes: { file: 'scenes.json', default: [] },
 	nodes: { file: 'nodes.json', default: {} },
 	users: { file: 'users.json', default: [] },
+	configurationTemplates: {
+		file: 'configurationTemplates.json',
+		default: [],
+	},
 }
 
 export default store

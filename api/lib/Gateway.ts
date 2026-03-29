@@ -1,16 +1,20 @@
-import * as fs from 'fs'
-import * as path from 'path'
-import * as utils from './utils'
-import { AlarmSensorType, SetValueAPIOptions } from 'zwave-js'
-import { CommandClasses, ValueID } from '@zwave-js/core'
-import * as Constants from './Constants'
-import { LogLevel, module } from './logger'
-import hassCfg, { ColorMode } from '../hass/configurations'
-import hassDevices from '../hass/devices'
-import { storeDir } from '../config/app'
-import { IClientPublishOptions } from 'mqtt'
-import MqttClient from './MqttClient'
-import ZwaveClient, {
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import * as utils from './utils.ts'
+import type { SetValueAPIOptions } from 'zwave-js'
+import { AlarmSensorType } from 'zwave-js'
+import type { ValueID } from '@zwave-js/core'
+import { CommandClasses } from '@zwave-js/core'
+import * as Constants from './Constants.ts'
+import type { LogLevel } from './logger.ts'
+import { module } from './logger.ts'
+import type { ColorMode } from '../hass/configurations.ts'
+import hassCfg from '../hass/configurations.ts'
+import hassDevices from '../hass/devices.ts'
+import { storeDir } from '../config/app.ts'
+import type { IClientPublishOptions } from 'mqtt'
+import MqttClient from './MqttClient.ts'
+import type {
 	AllowedApis,
 	CallAPIResult,
 	EventSource,
@@ -18,11 +22,12 @@ import ZwaveClient, {
 	ZUINode,
 	ZUIValueId,
 	ZUIValueIdState,
-} from './ZwaveClient'
+} from './ZwaveClient.ts'
+import type ZwaveClient from './ZwaveClient.ts'
 import Cron from 'croner'
 
-import crypto from 'crypto'
-import { IMeterCCSpecific } from './Constants'
+import crypto from 'node:crypto'
+import type { IMeterCCSpecific } from './Constants.ts'
 
 const logger = module('Gateway')
 
@@ -465,7 +470,6 @@ export default class Gateway {
 					else if (op.includes('+')) op = op.replace(/\+/, '-')
 					else if (op.includes('-')) op = op.replace(/-/, '+')
 
-					// eslint-disable-next-line @typescript-eslint/restrict-template-expressions
 					payload = eval(`${payload}${op}`)
 				}
 
@@ -1986,7 +1990,7 @@ export default class Gateway {
 		if (
 			this.config.hassDiscovery &&
 			changed &&
-			valueId.list &&
+			valueId.commandClass === CommandClasses['Thermostat Mode'] &&
 			this.discovered[valueId.id]
 		) {
 			const hassDevice = this.discovered[valueId.id]
@@ -2438,8 +2442,6 @@ export default class Gateway {
 		let result = null
 
 		try {
-			/* eslint-disable no-new-func */
-			// eslint-disable-next-line @typescript-eslint/no-implied-eval
 			const parseFunc = new Function(
 				'value',
 				'valueId',
@@ -2763,7 +2765,7 @@ export default class Gateway {
 			cfg.discovery_payload.on_command_type = 'last'
 		}
 
-		const whiteValue = node.values[`51-${endpoint}-currentcolor-0`]
+		const whiteValue = node.values[`51-${endpoint}-currentColor-0`]
 
 		// if whitevalue exists, use currentColor value to get/set white
 		if (whiteValue && currentColorValue) {
@@ -2775,7 +2777,7 @@ export default class Gateway {
 				cfg.discovery_payload.rgb_command_topic
 
 			cfg.discovery_payload.color_temp_command_template =
-				"{{ {'warmWhite': ((value - 245)|round(0)), 'coldWhite': (255 - (value - 245))|round(0))}|to_json }}"
+				"{{ {'warmWhite': ((value - 245)|round(0)), 'coldWhite': (255 - (value - 245))|round(0)}|to_json }}"
 			cfg.discovery_payload.color_temp_value_template =
 				"{{ '%03d%03d' | format((value_json.value.warmWhite || 0), (value_json.value.coldWhite || 0)) }}"
 		}

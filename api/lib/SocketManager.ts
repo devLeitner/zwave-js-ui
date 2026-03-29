@@ -1,10 +1,11 @@
 'use strict'
 
-import { Server as HttpServer } from 'http'
-import { module } from './logger'
-import { Server as SocketServer, Socket } from 'socket.io'
-import { TypedEventEmitter } from './EventEmitter'
-import { inboundEvents } from './SocketEvents'
+import type { Server as HttpServer } from 'node:http'
+import { module } from './logger.ts'
+import type { Socket } from 'socket.io'
+import { Server as SocketServer } from 'socket.io'
+import { TypedEventEmitter } from './EventEmitter.ts'
+import { inboundEvents } from './SocketEvents.ts'
 
 const logger = module('Socket')
 
@@ -75,10 +76,23 @@ class SocketManager extends TypedEventEmitter<SocketManagerEventCallbacks> {
 		this.emit('clients', 'connection', this.activeSockets)
 
 		// register inbound events from this socket
+		// subscribe/unsubscribe are handled directly in app.ts, skip them here
 		for (const k in inboundEvents) {
 			const eventName = inboundEvents[k]
-			// pass socket reference as first parameter
-			socket.on(eventName, this._emitEvent.bind(this, eventName, socket))
+			if (
+				eventName === inboundEvents.subscribe ||
+				eventName === inboundEvents.unsubscribe
+			) {
+				continue
+			}
+			socket.on(
+				eventName,
+				this._emitEvent.bind(
+					this,
+					eventName as SocketManagerEvents,
+					socket,
+				),
+			)
 		}
 
 		// https://socket.io/docs/v4/server-socket-instance/#events
@@ -93,7 +107,11 @@ class SocketManager extends TypedEventEmitter<SocketManagerEventCallbacks> {
 	 * Logs and emits the `eventName` with `socket` and `args` as parameters
 	 *
 	 */
-	private _emitEvent(eventName: inboundEvents, socket: Socket, data: any) {
+	private _emitEvent(
+		eventName: SocketManagerEvents,
+		socket: Socket,
+		data: any,
+	) {
 		logger.debug(`Event ${eventName} emitted to ${socket.id}`)
 		this.emit(eventName, socket, data)
 	}

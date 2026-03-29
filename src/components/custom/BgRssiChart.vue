@@ -10,11 +10,9 @@
 <script>
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
-import { isRssiError } from 'zwave-js/safe'
+import { isRssiError } from '@zwave-js/core'
 
-// eslint-disable-next-line no-unused-vars
 function touchZoomPlugin(opts) {
-	// eslint-disable-next-line no-unused-vars
 	function init(u, opts, data) {
 		let over = u.over
 		let rect, oxRange, oyRange, xVal, yVal
@@ -152,6 +150,10 @@ export default {
 			type: Boolean,
 			default: true,
 		},
+		minHeight: {
+			type: Number,
+			default: 500,
+		},
 	},
 	data() {
 		return {
@@ -208,13 +210,16 @@ export default {
 		},
 	},
 	watch: {
-		data(data, prevData) {
-			if (!this.chart) {
-				this.create()
-			} else if (this.isChanged(data, prevData)) {
-				this.chart.setData(data)
-				// this.chart.redraw();
-			}
+		data: {
+			handler(data, prevData) {
+				if (!this.chart) {
+					this.create()
+				} else if (this.isChanged(data, prevData)) {
+					this.chart.setData(data)
+					// this.chart.redraw();
+				}
+			},
+			deep: 1,
 		},
 	},
 	mounted() {
@@ -223,10 +228,10 @@ export default {
 	beforeUnmount() {
 		this.destroy()
 	},
-	beforeDestroy() {
-		this.destroy()
-	},
 	methods: {
+		getContainer() {
+			return this.container || this.$parent.$el.parentElement
+		},
 		checkRssiError(v) {
 			return isRssiError(v) ? null : v
 		},
@@ -289,11 +294,17 @@ export default {
 			this.isLoading = true
 
 			this.resizeTimeout = setTimeout(() => {
-				const container = this.container || this.$parent.$el
+				const container = this.getContainer()
 				const maxHeight = window.innerHeight - 200
 				const width = container.offsetWidth - 100
-				let height = container.offsetHeight - 100
-				if (height > maxHeight) {
+				// When fillSize=true the container height equals the chart
+				// height, causing an oscillating cascade that shrinks the
+				// chart until it disappears. Use viewport height directly.
+				let height = this.fillSize
+					? maxHeight
+					: container.offsetHeight - 100
+
+				if (!this.fillSize && height > maxHeight) {
 					height = maxHeight
 				}
 
@@ -308,26 +319,40 @@ export default {
 		create() {
 			this.destroy()
 
+			const container = this.getContainer()
+
 			if (this.fillSize) {
-				const container = this.container || this.$parent.$el
 				this.ro = new ResizeObserver(this.setSize.bind(this))
 				this.ro.observe(container)
 			}
 
-			const width = this.$parent.$el.offsetWidth
+			const width = container.offsetWidth
+
+			// Fix a race condition causing the chart to have width=0 after opening it the second time
+			if (width === 0) {
+				this.resizeTimeout = setTimeout(() => {
+					this.resizeTimeout = null
+					if (this.$refs.chart) this.create()
+				}, 50)
+				return
+			}
 
 			const opts = {
 				title: 'Background RSSI',
 				// class: "my-chart",
 				width,
-				height: 500,
+				height: this.minHeight,
 				plugins: [touchZoomPlugin()],
 				axes: [
 					{
-						stroke: this.$vuetify.theme.dark ? '#fff' : '#000',
+						stroke: this.$vuetify.theme.current.dark
+							? '#fff'
+							: '#000',
 					},
 					{
-						stroke: this.$vuetify.theme.dark ? '#fff' : '#000',
+						stroke: this.$vuetify.theme.current.dark
+							? '#fff'
+							: '#000',
 					},
 				],
 				series: [

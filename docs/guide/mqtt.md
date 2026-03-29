@@ -2,6 +2,8 @@
 
 You have access to almost all of the [Z-Wave JS APIs](https://zwave-js.github.io/node-zwave-js/#/README) (and more) via MQTT.
 
+The `mqtt_name` wildcard in the topic is the [sanitized](https://github.com/zwave-js/zwave-js-ui/blob/0e08e3a79e02656f47dc5b058ec08c02bbf6d90f/api/lib/utils.ts#L193) `name` set in the MQTT Settings
+
 ## Z-Wave Events
 
 If the **Send Z-Wave Events** flag of Gateway settings is enabled all Z-Wave JS events are published to MQTT. There are [Driver](https://zwave-js.github.io/node-zwave-js/#/api/driver?id=driver-events), [Node](https://zwave-js.github.io/node-zwave-js/#/api/node?id=zwavenode-events) and [Controller](https://zwave-js.github.io/node-zwave-js/#/api/node?id=controller-events) events
@@ -56,7 +58,7 @@ Payload:
 
 Example calling [startLevelChange](https://github.com/zwave-js/node-zwave-js/blob/c695ee81cb2b1d3cf15e3db1cc14b1e41a911cc0/packages/zwave-js/src/lib/commandclass/MultilevelSwitchCC.ts) command:
 
-Topic: `zwavejs/_CLIENTS/ZWAVE_GATEWAY-<yourName>/api/sendCommand/set`
+Topic: `zwavejs/_CLIENTS/ZWAVE_GATEWAY-<mqtt_name>/api/sendCommand/set`
 
 Payload:
 
@@ -96,7 +98,7 @@ Payload:
 
 ```json
 {
-	"args": []
+  "args": []
 }
 ```
 
@@ -148,7 +150,7 @@ Payload:
 
 ```json
 {
-	"args": []
+  "args": []
 }
 ```
 
@@ -242,6 +244,37 @@ Payload:
 
 </details>
 
+#### `checkAssociation`
+
+```ts
+checkAssociation(
+	source: AssociationAddress,
+	groupId: number,
+	association: AssociationAddress,
+): AssociationCheckResult;
+```
+
+Check if a given association is allowed.
+
+<details>
+<summary>Mqtt usage</summary>
+
+Topic: `zwave/_CLIENTS/ZWAVE_GATEWAY-<mqtt_name>/api/checkAssociation/set`
+
+Payload:
+
+```json
+{
+	"args": [
+		source,
+		groupId,
+		association
+	]
+}
+```
+
+</details>
+
 #### `addAssociations`
 
 ```ts
@@ -249,7 +282,7 @@ async addAssociations(
 	source: AssociationAddress,
 	groupId: number,
 	associations: AssociationAddress[],
-): Promise<boolean>;
+): Promise<AssociationCheckResult[]>;
 ```
 
 Add a node to the array of specified [associations](https://zwave-js.github.io/node-zwave-js/#/api/controller?id=association-interface).
@@ -427,7 +460,7 @@ Payload:
 
 ```json
 {
-	"args": []
+  "args": []
 }
 ```
 
@@ -686,7 +719,7 @@ Payload:
 
 ```json
 {
-	"args": []
+  "args": []
 }
 ```
 
@@ -818,7 +851,7 @@ Payload:
 
 ```json
 {
-	"args": []
+  "args": []
 }
 ```
 
@@ -839,7 +872,7 @@ Payload:
 
 ```json
 {
-	"args": []
+  "args": []
 }
 ```
 
@@ -938,7 +971,7 @@ Payload:
 
 ```json
 {
-	"args": []
+  "args": []
 }
 ```
 
@@ -961,7 +994,7 @@ Payload:
 
 ```json
 {
-	"args": []
+  "args": []
 }
 ```
 
@@ -986,7 +1019,53 @@ Payload:
 
 ```json
 {
-	"args": []
+  "args": []
+}
+```
+
+</details>
+
+#### `stopLearnMode`
+
+```ts
+stopLearnMode(): Promise<boolean>;
+```
+
+Stops learn mode.
+
+<details>
+<summary>Mqtt usage</summary>
+
+Topic: `zwave/_CLIENTS/ZWAVE_GATEWAY-<mqtt_name>/api/stopLearnMode/set`
+
+Payload:
+
+```json
+{
+  "args": []
+}
+```
+
+</details>
+
+#### `startLearnMode`
+
+```ts
+async startLearnMode(): Promise<JoinNetworkResult>;
+```
+
+Starts learn mode.
+
+<details>
+<summary>Mqtt usage</summary>
+
+Topic: `zwave/_CLIENTS/ZWAVE_GATEWAY-<mqtt_name>/api/startLearnMode/set`
+
+Payload:
+
+```json
+{
+  "args": []
 }
 ```
 
@@ -1057,7 +1136,7 @@ Payload:
 async getAvailableFirmwareUpdates(
 	nodeId: number,
 	options?: GetFirmwareUpdatesOptions,
-): Promise<{ version: string; changelog: string; channel: "stable" | "beta"; files: FirmwareUpdateFileInfo[]; downgrade: boolean; normalizedVersion: string; device: { manufacturerId: number; productType: number; productId: number; firmwareVersion: string; rfRegion?: RFRegion; }; }[]>;
+): Promise<{ version: string; changelog: string; channel: "stable" | "beta"; files: FirmwareUpdateFileInfo[]; downgrade: boolean; normalizedVersion: string; region?: string; device: { manufacturerId: number; productType: number; productId: number; firmwareVersion: string; rfRegion?: RFRegion; }; }[]>;
 ```
 
 <details>
@@ -1152,6 +1231,29 @@ Payload:
 
 </details>
 
+#### `setMaxLRPowerLevel`
+
+```ts
+async setMaxLRPowerLevel(powerlevel: number): Promise<boolean>;
+```
+
+<details>
+<summary>Mqtt usage</summary>
+
+Topic: `zwave/_CLIENTS/ZWAVE_GATEWAY-<mqtt_name>/api/setMaxLRPowerLevel/set`
+
+Payload:
+
+```json
+{
+	"args": [
+		powerlevel
+	]
+}
+```
+
+</details>
+
 #### `startInclusion`
 
 ```ts
@@ -1234,7 +1336,7 @@ Payload:
 
 ```json
 {
-	"args": []
+  "args": []
 }
 ```
 
@@ -1257,7 +1359,7 @@ Payload:
 
 ```json
 {
-	"args": []
+  "args": []
 }
 ```
 
@@ -1704,6 +1806,56 @@ Payload:
 
 </details>
 
+#### `checkLinkReliability`
+
+```ts
+async checkLinkReliability(
+	nodeId: number,
+	options: any,
+): Promise<LinkReliabilityCheckResult>;
+```
+
+<details>
+<summary>Mqtt usage</summary>
+
+Topic: `zwave/_CLIENTS/ZWAVE_GATEWAY-<mqtt_name>/api/checkLinkReliability/set`
+
+Payload:
+
+```json
+{
+	"args": [
+		nodeId,
+		options
+	]
+}
+```
+
+</details>
+
+#### `abortLinkReliabilityCheck`
+
+```ts
+abortLinkReliabilityCheck(nodeId: number): void;
+```
+
+<details>
+<summary>Mqtt usage</summary>
+
+Topic: `zwave/_CLIENTS/ZWAVE_GATEWAY-<mqtt_name>/api/abortLinkReliabilityCheck/set`
+
+Payload:
+
+```json
+{
+	"args": [
+		nodeId
+	]
+}
+```
+
+</details>
+
 #### `checkRouteHealth`
 
 ```ts
@@ -1840,8 +1992,8 @@ Payload:
 
 ```ts
 async firmwareUpdateOTW(
-	file: FwFile,
-): Promise<ControllerFirmwareUpdateResult>;
+	file: FwFile | FirmwareUpdateInfo,
+): Promise<OTWFirmwareUpdateResult>;
 ```
 
 Used to trigger an update of controller FW.
@@ -1866,7 +2018,7 @@ Payload:
 #### `updateFirmware`
 
 ```ts
-updateFirmware(
+async updateFirmware(
 	nodeId: number,
 	files: FwFile[],
 ): Promise<FirmwareUpdateResult>;
@@ -1916,7 +2068,7 @@ Payload:
 #### `dumpNode`
 
 ```ts
-dumpNode(nodeId: number): import("/home/daniel/GitProjects/zwave-js-ui/node_modules/zwave-js/build/lib/node/Dump").NodeDump;
+dumpNode(nodeId: number): NodeDump;
 ```
 
 <details>
@@ -1974,7 +2126,7 @@ Payload:
 
 ```json
 {
-	"args": []
+  "args": []
 }
 ```
 
@@ -1995,7 +2147,7 @@ Payload:
 
 ```json
 {
-	"args": []
+  "args": []
 }
 ```
 
@@ -2016,7 +2168,7 @@ Payload:
 
 ```json
 {
-	"args": []
+  "args": []
 }
 ```
 
@@ -2213,7 +2365,7 @@ Payload:
 
 ```json
 {
-	"args": []
+  "args": []
 }
 ```
 
@@ -2222,7 +2374,7 @@ Payload:
 #### `backupNVMRaw`
 
 ```ts
-async backupNVMRaw(): Promise<{ data: Buffer; fileName: string; }>;
+async backupNVMRaw(): Promise<{ data: Buffer; fileName: string }>;
 ```
 
 <details>
@@ -2234,7 +2386,7 @@ Payload:
 
 ```json
 {
-	"args": []
+  "args": []
 }
 ```
 
@@ -2243,7 +2395,7 @@ Payload:
 #### `restoreNVM`
 
 ```ts
-async restoreNVM(data: Buffer, useRaw = false): Promise<void>;
+async restoreNVM(data: Uint8Array, useRaw = false): Promise<void>;
 ```
 
 <details>
@@ -2279,7 +2431,7 @@ Payload:
 
 ```json
 {
-	"args": []
+  "args": []
 }
 ```
 
@@ -2334,11 +2486,11 @@ Payload:
 #### `parseQRCodeString`
 
 ```ts
-parseQRCodeString(qrString: string): {
+async parseQRCodeString(qrString: string): Promise<{
 	parsed?: QRProvisioningInformation
 	nodeId?: number
 	exists: boolean
-};
+}>;
 ```
 
 <details>
@@ -2361,7 +2513,7 @@ Payload:
 #### `provisionSmartStartNode`
 
 ```ts
-provisionSmartStartNode(entry: PlannedProvisioningEntry | string): PlannedProvisioningEntry;
+async provisionSmartStartNode(entry: PlannedProvisioningEntry | string): Promise<PlannedProvisioningEntry>;
 ```
 
 <details>
@@ -2386,7 +2538,11 @@ Payload:
 ```ts
 async updateControllerNodeProps(
 	node?: ZUINode,
-	props: Array<'powerlevel' | 'RFRegion'> = ['powerlevel', 'RFRegion'],
+	props: Array<'powerlevel' | 'RFRegion' | 'maxLongRangePowerlevel'> = [
+		'powerlevel',
+		'RFRegion',
+		'maxLongRangePowerlevel',
+	],
 ): Promise<void>;
 ```
 

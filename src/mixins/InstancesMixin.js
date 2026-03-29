@@ -1,11 +1,76 @@
 import { manager, instances } from '../lib/instanceManager'
-import { socketEvents } from '@server/lib/SocketEvents.js'
+import { socketEvents } from '@server/lib/SocketEvents'
 import ConfigApis from '@/apis/ConfigApis'
 import useBaseStore from '../stores/base.js'
 import logger from '../lib/logger'
 import { mapState } from 'pinia'
 
 const log = logger.get('InstancesMixin')
+
+// Module-level reference counting for socket channel subscriptions.
+// Maps channel name → number of active component subscribers.
+// This ensures a channel is only unsubscribed from the server when the
+// last component that needed it has unmounted.
+const channelRefCounts = new Map() // channel → count
+let _managedSocket = null
+let _reconnectHandler = null
+let _hasConnectedOnce = false
+
+function getChannelManager(socket) {
+	if (!socket) return null
+
+	// If the socket instance changed (e.g. after logout), reset state
+	if (_managedSocket !== socket) {
+		if (_managedSocket && _reconnectHandler) {
+			_managedSocket.off('connect', _reconnectHandler)
+		}
+		channelRefCounts.clear()
+		_managedSocket = socket
+		_hasConnectedOnce = false
+		_reconnectHandler = () => {
+			// skip first connect — subscribeChannels already emits SUBSCRIBE
+			if (!_hasConnectedOnce) {
+				_hasConnectedOnce = true
+				return
+			}
+			const active = [...channelRefCounts.entries()]
+				.filter(([, n]) => n > 0)
+				.map(([c]) => c)
+			if (active.length > 0) {
+				socket.emit('SUBSCRIBE', { channels: active })
+			}
+		}
+		socket.on('connect', _reconnectHandler)
+	}
+
+	return {
+		subscribe(channels) {
+			const toSubscribe = []
+			// Subscribe only if the channel was not subscribed before
+			for (const ch of channels) {
+				const prev = channelRefCounts.get(ch) ?? 0
+				channelRefCounts.set(ch, prev + 1)
+				if (prev === 0) toSubscribe.push(ch)
+			}
+			if (toSubscribe.length > 0) {
+				socket.emit('SUBSCRIBE', { channels: toSubscribe })
+			}
+		},
+		unsubscribe(channels) {
+			const toUnsubscribe = []
+			// Unsubscribe from channels that have no more subscribers
+			for (const ch of channels) {
+				const prev = channelRefCounts.get(ch) ?? 0
+				const next = Math.max(0, prev - 1)
+				channelRefCounts.set(ch, next)
+				if (next === 0) toUnsubscribe.push(ch)
+			}
+			if (toUnsubscribe.length > 0) {
+				socket.emit('UNSUBSCRIBE', { channels: toUnsubscribe })
+			}
+		},
+	}
+}
 
 export default {
 	data() {
@@ -20,6 +85,12 @@ export default {
 		},
 	},
 	methods: {
+		showSnackbar(...args) {
+			return this.app.showSnackbar(...args)
+		},
+		dismissSnackbar(toastId) {
+			this.app.dismissSnackbar(toastId)
+		},
 		bindEvent(eventName, handler) {
 			this.socket.on(socketEvents[eventName], handler)
 			this.bindedSocketEvents[eventName] = handler
@@ -33,6 +104,35 @@ export default {
 			}
 
 			this.bindedSocketEvents = {}
+
+			if (this._subscribedChannels?.length > 0) {
+				getChannelManager(this.socket)?.unsubscribe(
+					this._subscribedChannels,
+				)
+				this._subscribedChannels = []
+			}
+		},
+		subscribeChannels(channels) {
+			const existing = this._subscribedChannels || []
+			const newChannels = channels.filter((c) => !existing.includes(c))
+
+			if (newChannels.length > 0) {
+				getChannelManager(this.socket)?.subscribe(newChannels)
+				this._subscribedChannels = [...existing, ...newChannels]
+			} else if (!this._subscribedChannels) {
+				this._subscribedChannels = existing
+			}
+		},
+		unsubscribeChannels(channels) {
+			const existing = this._subscribedChannels || []
+			const toUnsubscribe = channels.filter((c) => existing.includes(c))
+
+			if (toUnsubscribe.length > 0) {
+				getChannelManager(this.socket)?.unsubscribe(toUnsubscribe)
+				this._subscribedChannels = existing.filter(
+					(c) => !toUnsubscribe.includes(c),
+				)
+			}
 		},
 		async pingNode(node) {
 			const response = await this.app.apiRequest('pingNode', [node.id], {
@@ -212,8 +312,8 @@ export default {
 				} else if (action === 'firmwareUpdateOTW') {
 					const result = await this.app.confirm(
 						'Firmware update OTW',
-						`<h3 class="red--text">We don't take any responsibility if devices upgraded using Z-Wave JS don't work after an update. Always double-check that the correct update is about to be installed.</h3>
-						<h3 class="mt-2 red--text">A failure during this process may leave your controller in recovery mode, rendering it unusable until a correct firmware image is uploaded. In case of 500 series controllers a failure on this process is likely unrecoverable.</h3>
+						`<h3 class="text-error">We don't take any responsibility if devices upgraded using Z-Wave JS don't work after an update. Always double-check that the correct update is about to be installed.</h3>
+						<h3 class="mt-2 text-error">A failure during this process may leave your controller in recovery mode, rendering it unusable until a correct firmware image is uploaded. In case of 500 series controllers a failure on this process is likely unrecoverable.</h3>
 						`,
 						'alert',
 						{
@@ -302,7 +402,7 @@ export default {
 							hint: 'Target to update',
 							key: 'target',
 							items: targets.map((t) => ({
-								text: 'Target ' + t,
+								title: 'Target ' + t,
 								value: t,
 							})),
 						}

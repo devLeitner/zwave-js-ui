@@ -8,37 +8,32 @@
 			class="pb-6 mx-2"
 		>
 			<v-expansion-panels
-				accordion
+				variant="accordion"
 				multiple
 				flat
 				class="expansion-panels-outlined"
 			>
 				<v-expansion-panel key="UI">
-					<v-expansion-panel-header>
+					<v-expansion-panel-title>
 						<v-row no-gutters>
 							<v-col align-self="center"> UI </v-col>
 							<v-col class="text-right pr-5">
 								<v-btn
 									@click.stop="openDocs('general')"
 									color="primary"
-									outlined
-									x-small
+									variant="outlined"
+									size="x-small"
 								>
 									Docs
-									<v-icon x-small right>launch</v-icon>
+									<v-icon size="x-small" end>launch</v-icon>
 								</v-btn>
 							</v-col>
 						</v-row>
-					</v-expansion-panel-header>
-					<v-expansion-panel-content>
+					</v-expansion-panel-title>
+					<v-expansion-panel-text>
 						<v-row class="mb-5">
 							<v-col cols="12" sm="6">
-								<v-switch
-									hint="Enable dark mode"
-									persistent-hint
-									label="Dark mode"
-									v-model="internalDarkMode"
-								></v-switch>
+								<color-scheme />
 							</v-col>
 							<v-col cols="12" sm="6">
 								<v-switch
@@ -50,34 +45,59 @@
 							</v-col>
 							<v-col cols="12" sm="6">
 								<v-switch
+									hint="Show labels under all navigation tabs (only when tabs for navigation is enabled)"
+									persistent-hint
+									label="Show labels on all tabs"
+									:disabled="!internalNavTabs"
+									v-model="internalShowTabLabels"
+								></v-switch>
+							</v-col>
+							<v-col cols="12" sm="6">
+								<v-switch
 									hint="Enable this to hide sensitive informations from the UI"
 									persistent-hint
 									label="Streamer mode"
 									v-model="internalStreamerMode"
 								></v-switch>
 							</v-col>
+							<v-col cols="12" sm="6">
+								<v-switch
+									hint="Enable this to use compact view by default in the Control Panel (can be toggled with the Compact button)"
+									persistent-hint
+									label="Compact view by default"
+									v-model="internalCompactMode"
+								></v-switch>
+							</v-col>
+							<v-col cols="12" sm="6">
+								<v-text-field
+									hint="Customize the browser tab title (useful when managing multiple hubs)"
+									persistent-hint
+									label="Browser title"
+									v-model="internalBrowserTitle"
+								></v-text-field>
+							</v-col>
 						</v-row>
-					</v-expansion-panel-content>
+					</v-expansion-panel-text>
 					<v-divider />
 				</v-expansion-panel>
 				<v-expansion-panel key="General">
-					<v-expansion-panel-header>
+					<v-expansion-panel-title>
 						<v-row no-gutters>
 							<v-col align-self="center"> General </v-col>
 							<v-col class="text-right pr-5">
 								<v-btn
 									@click.stop="openDocs('general')"
 									color="primary"
-									outlined
-									x-small
+									variant="outlined"
+									size="x-small"
 								>
 									Docs
-									<v-icon x-small right>launch</v-icon>
+									<v-icon size="x-small" end>launch</v-icon>
 								</v-btn>
 							</v-col>
 						</v-row>
-					</v-expansion-panel-header>
-					<v-expansion-panel-content>
+					</v-expansion-panel-title>
+					<v-expansion-panel-text>
 						<v-card flat>
 							<v-card-text>
 								<v-row class="mb-5">
@@ -113,7 +133,7 @@
 											]"
 											multiple
 											chips
-											deletable-chips
+											closable-chips
 											v-model="newGateway.plugins"
 										></v-combobox>
 									</v-col>
@@ -144,7 +164,7 @@
 										v-if="newGateway.logEnabled"
 									>
 										<v-switch
-											hint="Store logs in a file. Default: store/zwave-js-ui_%DATE%.log"
+											hint="Store logs in a file. Default: store/log/z-ui_%DATE%.log"
 											persistent-hint
 											label="Log to file"
 											v-model="newGateway.logToFile"
@@ -172,10 +192,10 @@
 										></v-checkbox>
 									</v-col>
 								</v-row>
-								<v-subheader class="font-weight-bold">
+								<v-list-subheader class="font-weight-bold">
 									Devices values configuration
-								</v-subheader>
-								<div class="mb-5 caption">
+								</v-list-subheader>
+								<div class="mb-5 text-caption">
 									Add here valueIds specific configurations
 									for each device. This means that if you
 									create an entry here this configuration will
@@ -188,14 +208,14 @@
 									:items-per-page-options="[
 										10,
 										20,
-										{ text: 'All', value: -1 },
+										{ title: 'All', value: -1 },
 									]"
 									class="elevation-1"
 								>
-									<template v-slot:top>
+									<template #top>
 										<v-btn
-											color="blue darken-1"
-											text
+											color="primary"
+											variant="text"
 											@click="dialogValue = true"
 										>
 											<v-icon>add</v-icon>
@@ -203,10 +223,10 @@
 											New Value
 										</v-btn>
 									</template>
-									<template v-slot:[`item.device`]="{ item }">
+									<template #[`item.device`]="{ item }">
 										{{ deviceName(item.device) }}
 									</template>
-									<template v-slot:[`item.value`]="{ item }">
+									<template #[`item.value`]="{ item }">
 										{{
 											item.value.label +
 											' (' +
@@ -214,19 +234,17 @@
 											')'
 										}}
 									</template>
-									<template v-slot:[`item.topic`]="{ item }">
+									<template #[`item.topic`]="{ item }">
 										{{ item.topic }}
 									</template>
 									<template
-										v-slot:[`item.postOperation`]="{ item }"
+										#[`item.postOperation`]="{ item }"
 									>
 										{{
 											item.postOperation || 'No operation'
 										}}
 									</template>
-									<template
-										v-slot:[`item.enablePoll`]="{ item }"
-									>
+									<template #[`item.enablePoll`]="{ item }">
 										{{
 											item.enablePoll
 												? 'Interval: ' +
@@ -235,20 +253,18 @@
 												: 'No'
 										}}
 									</template>
-									<template
-										v-slot:[`item.actions`]="{ item }"
-									>
+									<template #[`item.actions`]="{ item }">
 										<v-icon
-											small
+											size="small"
 											class="mr-2"
-											color="green"
+											color="success"
 											@click="editItem(item)"
 										>
 											edit
 										</v-icon>
 										<v-icon
-											small
-											color="red"
+											size="small"
+											color="error"
 											@click="deleteItem(item)"
 										>
 											delete
@@ -256,10 +272,10 @@
 									</template>
 								</v-data-table>
 
-								<v-subheader class="font-weight-bold">
+								<v-list-subheader class="font-weight-bold">
 									Scheduled Jobs
-								</v-subheader>
-								<div class="mb-5 caption">
+								</v-list-subheader>
+								<div class="mb-5 text-caption">
 									Add here a list of scheduled jobs that will
 									run specified driver function based on a
 									cron expression.
@@ -270,14 +286,14 @@
 									:items-per-page-options="[
 										10,
 										20,
-										{ text: 'All', value: -1 },
+										{ title: 'All', value: -1 },
 									]"
 									class="elevation-1"
 								>
-									<template v-slot:top>
+									<template #top>
 										<v-btn
-											color="blue darken-1"
-											text
+											color="primary"
+											variant="text"
 											@click="editJob()"
 										>
 											<v-icon>add</v-icon>
@@ -285,17 +301,17 @@
 											New Value
 										</v-btn>
 									</template>
-									<template v-slot:[`item.code`]="{ item }">
+									<template #[`item.code`]="{ item }">
 										<code>{{
 											item.code.substring(0, 30)
 										}}</code>
 									</template>
-									<template
-										v-slot:[`item.enabled`]="{ item }"
-									>
+									<template #[`item.enabled`]="{ item }">
 										<v-icon
 											:color="
-												item.enabled ? 'green' : 'red'
+												item.enabled
+													? 'success'
+													: 'error'
 											"
 										>
 											{{
@@ -305,12 +321,12 @@
 											}}
 										</v-icon>
 									</template>
-									<template
-										v-slot:[`item.runOnInit`]="{ item }"
-									>
+									<template #[`item.runOnInit`]="{ item }">
 										<v-icon
 											:color="
-												item.runOnInit ? 'green' : 'red'
+												item.runOnInit
+													? 'success'
+													: 'error'
 											"
 										>
 											{{
@@ -320,20 +336,18 @@
 											}}
 										</v-icon>
 									</template>
-									<template
-										v-slot:[`item.actions`]="{ item }"
-									>
+									<template #[`item.actions`]="{ item }">
 										<v-icon
-											small
+											size="small"
 											class="mr-2"
-											color="green"
+											color="warning"
 											@click="editJob(item)"
 										>
 											edit
 										</v-icon>
 										<v-icon
-											small
-											color="red"
+											size="small"
+											color="error"
 											@click="deleteJob(item)"
 										>
 											delete
@@ -342,29 +356,31 @@
 								</v-data-table>
 							</v-card-text>
 						</v-card>
-					</v-expansion-panel-content>
+					</v-expansion-panel-text>
 					<v-divider />
 				</v-expansion-panel>
 
 				<v-expansion-panel key="Backup">
-					<v-expansion-panel-header>
+					<v-expansion-panel-title>
 						<v-row no-gutters>
 							<v-col align-self="center"> Backup </v-col>
 							<v-col class="text-right pr-5">
 								<v-btn
 									@click.stop="openDocs('backup')"
 									color="primary"
-									outlined
-									x-small
+									variant="outlined"
+									size="x-small"
 								>
 									Docs
-									<v-icon x-small right>launch</v-icon>
+									<v-icon size="x-small" end>launch</v-icon>
 								</v-btn>
 							</v-col>
 						</v-row>
-					</v-expansion-panel-header>
-					<v-expansion-panel-content>
-						<v-subheader><strong>STORE</strong></v-subheader>
+					</v-expansion-panel-title>
+					<v-expansion-panel-text>
+						<v-list-subheader
+							><strong>STORE</strong></v-list-subheader
+						>
 
 						<v-row class="mb-5">
 							<v-col cols="12" sm="6">
@@ -417,13 +433,13 @@
 						</v-row>
 
 						<v-divider />
-						<v-subheader
+						<v-list-subheader
 							><strong
 								>Controller (NVM) Backup</strong
-							></v-subheader
+							></v-list-subheader
 						>
 
-						<v-alert dense text type="warning">
+						<v-alert density="compact" text type="warning">
 							Some 700 series controllers may stop functioning
 							properly after an NVM backup. Z-Wave JS will try to
 							restart (soft reset) the controller afterwards to
@@ -481,17 +497,22 @@
 								></v-text-field>
 							</v-col>
 						</v-row>
-					</v-expansion-panel-content>
+					</v-expansion-panel-text>
 					<v-divider />
 				</v-expansion-panel>
 
 				<v-expansion-panel key="Zwave">
-					<v-expansion-panel-header>
+					<v-expansion-panel-title>
 						<v-row no-gutters>
 							<v-col align-self="center">
 								<v-row align-self="center">
 									<span class="my-auto ml-3"> Z-Wave </span>
 									<v-checkbox
+										v-if="
+											!isSettingManagedExternally(
+												'zwave.enabled',
+											)
+										"
 										class="mt-0 ml-2"
 										hide-details
 										@click.stop
@@ -505,16 +526,16 @@
 								<v-btn
 									@click.stop="openDocs('zwave')"
 									color="primary"
-									outlined
-									x-small
+									variant="outlined"
+									size="x-small"
 								>
 									Docs
-									<v-icon x-small right>launch</v-icon>
+									<v-icon size="x-small" end>launch</v-icon>
 								</v-btn>
 							</v-col>
 						</v-row>
-					</v-expansion-panel-header>
-					<v-expansion-panel-content v-if="newZwave.enabled">
+					</v-expansion-panel-title>
+					<v-expansion-panel-text v-if="newZwave.enabled">
 						<v-card flat>
 							<v-card-text>
 								<v-row>
@@ -522,17 +543,38 @@
 										<v-combobox
 											v-model="newZwave.port"
 											label="Serial Port"
-											hint="Ex /dev/ttyUSB0. If your port is not listed here just write the port path here"
+											:hint="
+												isPortManagedExternally
+													? 'Port is controlled externally through the ZWAVE_PORT env variable'
+													: 'Ex /dev/ttyUSB0. If your port is not listed here just write the port path here'
+											"
 											persistent-hint
-											:rules="[
-												rules.required,
-												differentPorts,
-											]"
-											required
+											:rules="
+												isPortManagedExternally
+													? []
+													: [
+															rules.required,
+															differentPorts,
+														]
+											"
+											:required="!isPortManagedExternally"
+											:disabled="isPortManagedExternally"
 											:items="serial_ports"
+											:loading="loadingSerialPorts"
+											@focus="loadSerialPorts"
+											append-icon="refresh"
+											@click:append="refreshSerialPorts"
 										></v-combobox>
 									</v-col>
-									<v-col cols="12" sm="6">
+									<v-col
+										v-if="
+											!isSettingManagedExternally(
+												'zwave.deviceConfigPriorityDir',
+											)
+										"
+										cols="12"
+										sm="6"
+									>
 										<v-text-field
 											v-model.trim="
 												newZwave.deviceConfigPriorityDir
@@ -546,14 +588,17 @@
 									<!-- SECURITY KEYS -->
 									<v-row
 										class="mt-0"
-										v-if="newZwave.securityKeys"
+										v-if="
+											newZwave.securityKeys &&
+											!allClassicSecurityKeysManagedExternally
+										"
 									>
 										<v-col cols="12">
-											<v-subheader
-												class="font-weight-bold primary--text"
+											<v-list-subheader
+												class="font-weight-bold text-primary"
 											>
 												Security Keys
-											</v-subheader>
+											</v-list-subheader>
 										</v-col>
 										<v-col cols="12" sm="6">
 											<v-text-field
@@ -578,13 +623,13 @@
 													),
 												]"
 												persistent-hint
-												append-outer-icon="wifi_protected_setup"
+												append-icon="wifi_protected_setup"
 												:type="
 													streamerMode
 														? 'password'
 														: 'text'
 												"
-												@click:append-outer="
+												@click:append="
 													randomKey(
 														'S2_Unauthenticated',
 														newZwave.securityKeys,
@@ -615,13 +660,13 @@
 														newZwave.securityKeys,
 													),
 												]"
-												append-outer-icon="wifi_protected_setup"
+												append-icon="wifi_protected_setup"
 												:type="
 													streamerMode
 														? 'password'
 														: 'text'
 												"
-												@click:append-outer="
+												@click:append="
 													randomKey(
 														'S2_Authenticated',
 														newZwave.securityKeys,
@@ -651,13 +696,13 @@
 														newZwave.securityKeys,
 													),
 												]"
-												append-outer-icon="wifi_protected_setup"
+												append-icon="wifi_protected_setup"
 												:type="
 													streamerMode
 														? 'password'
 														: 'text'
 												"
-												@click:append-outer="
+												@click:append="
 													randomKey(
 														'S2_AccessControl',
 														newZwave.securityKeys,
@@ -683,13 +728,13 @@
 														newZwave.securityKeys,
 													),
 												]"
-												append-outer-icon="wifi_protected_setup"
+												append-icon="wifi_protected_setup"
 												:type="
 													streamerMode
 														? 'password'
 														: 'text'
 												"
-												@click:append-outer="
+												@click:append="
 													randomKey(
 														'S0_Legacy',
 														newZwave.securityKeys,
@@ -700,14 +745,17 @@
 									</v-row>
 									<v-row
 										class="mt-0"
-										v-if="newZwave.securityKeysLongRange"
+										v-if="
+											newZwave.securityKeysLongRange &&
+											!allLRSecurityKeysManagedExternally
+										"
 									>
 										<v-col cols="12">
-											<v-subheader
-												class="font-weight-bold primary--text"
+											<v-list-subheader
+												class="font-weight-bold text-primary"
 											>
 												Security Keys (Long Range)
-											</v-subheader>
+											</v-list-subheader>
 										</v-col>
 										<v-col cols="12" sm="6">
 											<v-text-field
@@ -733,13 +781,13 @@
 														newZwave.securityKeysLongRange,
 													),
 												]"
-												append-outer-icon="wifi_protected_setup"
+												append-icon="wifi_protected_setup"
 												:type="
 													streamerMode
 														? 'password'
 														: 'text'
 												"
-												@click:append-outer="
+												@click:append="
 													randomKey(
 														'S2_Authenticated',
 														newZwave.securityKeysLongRange,
@@ -770,13 +818,13 @@
 														newZwave.securityKeysLongRange,
 													),
 												]"
-												append-outer-icon="wifi_protected_setup"
+												append-icon="wifi_protected_setup"
 												:type="
 													streamerMode
 														? 'password'
 														: 'text'
 												"
-												@click:append-outer="
+												@click:append="
 													randomKey(
 														'S2_AccessControl',
 														newZwave.securityKeysLongRange,
@@ -788,89 +836,139 @@
 									<!-- END: SECURITY KEYS -->
 
 									<!-- RADIO CONFIGURATION -->
-									<v-row class="mt-0">
-										<v-col cols="12" class="mb-n8">
-											<v-subheader
-												class="font-weight-bold primary--text mb-0"
-											>
-												Default Radio configuration
-											</v-subheader>
-										</v-col>
-										<v-col cols="6">
-											<v-select
-												label="RF Region"
-												persistent-hint
-												hint="Will be applied on every startup if the current region of your Z-Wave controller differs. Leave this empty to use the default region of your stick. Not all controllers support changing the region."
-												:items="rfRegions"
-												clearable
-												v-model="newZwave.rf.region"
-											>
-											</v-select>
-										</v-col>
-										<v-col cols="6">
-											<v-select
-												label="Maximum LR Power Level"
-												persistent-hint
-												hint="The maximum power level to be used by the dynamic power algorithm of Z-Wave LR. Will be applied on every startup if the current setting of your Z-Wave controller differs. Only LR-capable controllers support this setting."
-												:items="maxLRPowerLevels"
-												clearable
-												v-model="
-													newZwave.rf
-														.maxLongRangePowerlevel
+									<template
+										v-if="!allRfSettingsManagedExternally"
+									>
+										<v-row class="mt-0">
+											<v-col cols="12" class="mb-n8">
+												<v-list-subheader
+													class="font-weight-bold text-primary mb-0"
+												>
+													Default Radio configuration
+												</v-list-subheader>
+											</v-col>
+											<v-col
+												cols="6"
+												v-if="
+													!isSettingManagedExternally(
+														'zwave.rf.region',
+													)
 												"
 											>
-											</v-select>
-										</v-col>
-									</v-row>
-									<v-row class="mt-0">
-										<v-col cols="12" sm="6">
-											<v-text-field
-												label="Normal Power Level"
-												v-model.number="
-													newZwave.rf.txPower
-														.powerlevel
+												<v-select
+													label="RF Region"
+													persistent-hint
+													hint="Will be used to automatically configure your controller for the region you are in. Not all controllers support changing the RF region."
+													:items="rfRegions"
+													:rules="[rules.required]"
+													required
+													v-model="newZwave.rf.region"
+												>
+												</v-select>
+											</v-col>
+											<v-col
+												cols="6"
+												v-if="
+													!isSettingManagedExternally(
+														'zwave.rf.autoPowerlevels',
+													)
 												"
-												persistent-hint
-												:min="-10"
-												:max="20"
-												:step="0.1"
-												hint="Power level in dBm. Min -10, Max +14 or +20, depending on the Z-Wave chip. Will be applied on every startup if the current setting of your Z-Wave controller differs. Not all controllers support changing the powerlevel."
-												suffix="dBm"
-												type="number"
-												:rules="[validTxPower]"
-											></v-text-field>
-										</v-col>
-										<v-col cols="12" sm="6">
-											<v-text-field
-												label="Measured output power at 0 dBm"
-												persistent-hint
-												v-model.number="
-													newZwave.rf.txPower
-														.measured0dBm
-												"
-												:min="-10"
-												:max="10"
-												:step="0.1"
-												hint="Measured output power at 0 dBm in dBm. Min -10, Max +10. Will be applied on every startup if the current setting of your Z-Wave controller differs. Not all controllers support changing the powerlevel."
-												suffix="dBm"
-												type="number"
-												:rules="[validTxPower]"
-											></v-text-field>
-										</v-col>
-									</v-row>
+											>
+												<v-switch
+													hint="When enabled, both normal and LR power levels will be automatically set to legal limits based on the RF region whenever the region is changed. Only supported for Europe and USA regions."
+													persistent-hint
+													label="Automatic Power Level"
+													v-model="
+														newZwave.rf
+															.autoPowerlevels
+													"
+												></v-switch>
+											</v-col>
+										</v-row>
+										<v-row class="mt-0">
+											<v-col cols="12" sm="6">
+												<v-text-field
+													v-if="
+														!newZwave.rf
+															.autoPowerlevels
+													"
+													label="Normal Power Level"
+													v-model.number="
+														newZwave.rf.txPower
+															.powerlevel
+													"
+													persistent-hint
+													:min="-10"
+													:max="20"
+													:step="0.1"
+													hint="Power level in dBm. Min -10, Max +14 or +20, depending on the Z-Wave chip. Will be applied on every startup if the current setting of your Z-Wave controller differs. Not all controllers support changing the powerlevel."
+													suffix="dBm"
+													type="number"
+													:rules="[validTxPower]"
+												></v-text-field>
+											</v-col>
+											<v-col cols="12" sm="6">
+												<v-text-field
+													label="Measured output power at 0 dBm"
+													persistent-hint
+													v-model.number="
+														newZwave.rf.txPower
+															.measured0dBm
+													"
+													:min="-10"
+													:max="10"
+													:step="0.1"
+													hint="Measured output power at 0 dBm in dBm. Min -10, Max +10. Will be applied on every startup if the current setting of your Z-Wave controller differs. Not all controllers support changing the powerlevel."
+													suffix="dBm"
+													type="number"
+													:rules="[validTxPower]"
+												></v-text-field>
+											</v-col>
+
+											<v-col cols="12" sm="6">
+												<v-select
+													label="Maximum LR Power Level"
+													v-if="
+														!newZwave.rf
+															.autoPowerlevels
+													"
+													persistent-hint
+													hint="The maximum power level to be used by the dynamic power algorithm of Z-Wave LR. Will be applied on every startup if the current setting of your Z-Wave controller differs. Only LR-capable controllers support this setting."
+													:items="maxLRPowerLevels"
+													clearable
+													v-model="
+														newZwave.rf
+															.maxLongRangePowerlevel
+													"
+												>
+												</v-select>
+											</v-col>
+										</v-row>
+									</template>
 									<!-- END: RADIO CONFIGURATION -->
 
 									<!-- DRIVER LOGS -->
-									<v-row class="mt-0">
+									<v-row
+										class="mt-0"
+										v-if="!allLogSettingsManagedExternally"
+									>
 										<v-col cols="12" class="mb-n8">
-											<v-subheader
-												class="font-weight-bold primary--text mb-0"
+											<v-list-subheader
+												class="font-weight-bold text-primary mb-0"
 											>
 												Driver logs
-											</v-subheader>
+											</v-list-subheader>
 										</v-col>
 
-										<v-col cols="12" sm="6">
+										<v-col
+											cols="12"
+											sm="6"
+											v-if="
+												!isSettingManagedExternally(
+													'zwave.logEnabled',
+												)
+											"
+										>
 											<v-switch
 												hint="Required for debugging issue reports"
 												persistent-hint
@@ -879,7 +977,12 @@
 											></v-switch>
 										</v-col>
 										<v-col
-											v-if="newZwave.logEnabled"
+											v-if="
+												newZwave.logEnabled &&
+												!isSettingManagedExternally(
+													'zwave.logLevel',
+												)
+											"
 											cols="12"
 											sm="6"
 										>
@@ -890,7 +993,12 @@
 											></v-select>
 										</v-col>
 										<v-col
-											v-if="newZwave.logEnabled"
+											v-if="
+												newZwave.logEnabled &&
+												!isSettingManagedExternally(
+													'zwave.logToFile',
+												)
+											"
 											cols="12"
 											sm="6"
 										>
@@ -904,7 +1012,12 @@
 										<v-col
 											cols="12"
 											sm="6"
-											v-if="newZwave.logEnabled"
+											v-if="
+												newZwave.logEnabled &&
+												!isSettingManagedExternally(
+													'zwave.maxFiles',
+												)
+											"
 										>
 											<v-text-field
 												v-model.number="
@@ -933,7 +1046,7 @@
 												multiple
 												:rules="[rules.validNodeLog]"
 												chips
-												deletable-chips
+												closable-chips
 												v-model="newZwave.nodeFilter"
 											></v-combobox>
 										</v-col>
@@ -943,14 +1056,22 @@
 									<!-- STARTUP AND RECOVERY BEHAVIOR -->
 									<v-row class="mt-0">
 										<v-col cols="12" class="mb-n8">
-											<v-subheader
-												class="font-weight-bold primary--text mb-0"
+											<v-list-subheader
+												class="font-weight-bold text-primary mb-0"
 											>
 												Startup and recovery behavior
-											</v-subheader>
+											</v-list-subheader>
 										</v-col>
 
-										<v-col cols="12" sm="6">
+										<v-col
+											cols="12"
+											sm="6"
+											v-if="
+												!isSettingManagedExternally(
+													'zwave.enableSoftReset',
+												)
+											"
+										>
 											<v-switch
 												label="Soft Reset"
 												hint="Soft Reset is required after some commands like changing the RF region or restoring an NVM backup. Because it may cause problems in Docker containers with certain Z-Wave sticks, this functionality may be disabled. NB: Disabling this functionality only affects 500 series and older controllers"
@@ -1022,12 +1143,24 @@
 									<!-- MISC -->
 									<v-row class="mt-0">
 										<v-col cols="12" class="mb-n8">
-											<v-subheader
-												class="font-weight-bold primary--text mb-0"
+											<v-list-subheader
+												class="font-weight-bold text-primary mb-0"
 											>
 												Misc settings
-											</v-subheader>
+											</v-list-subheader>
 										</v-col>
+
+										<v-col cols="12" sm="6">
+											<v-switch
+												hint="Some SET-type commands optimistically update the current value to match the target value when the device acknowledges the command. While this generally makes UIs feel more responsive, it is not necessary for devices which report their status on their own and can lead to confusing behavior when dealing with slow devices like blinds."
+												persistent-hint
+												label="Disable optimistic value updates"
+												v-model="
+													newZwave.disableOptimisticValueUpdate
+												"
+											></v-switch>
+										</v-col>
+
 										<v-col cols="12" sm="6">
 											<v-switch
 												hint="Usage statistics allows us to gain insight how `zwave-js` is used, which manufacturers and devices are most prevalent and where to best focus our efforts in order to improve `zwave-js` the most. We do not store any personal information. Details can be found under https://zwave-js.github.io/node-zwave-js/#/data-collection/data-collection?id=usage-statistics"
@@ -1039,9 +1172,22 @@
 											></v-switch>
 										</v-col>
 
+										<v-col cols="12" sm="6">
+											<v-switch
+												hint="When enabled, the application will not automatically check for firmware updates in the background. You can still manually check for updates from the node's firmware update tab."
+												persistent-hint
+												label="Disable automatic firmware update checks"
+												v-model="
+													newZwave.disableAutomaticFirmwareUpdateChecks
+												"
+											></v-switch>
+										</v-col>
+
 										<input
 											type="hidden"
-											:value="newZwave.disclaimerVersion"
+											:modelValue="
+												newZwave.disclaimerVersion
+											"
 										/>
 										<v-col cols="12" sm="6">
 											<v-autocomplete
@@ -1050,42 +1196,29 @@
 												label="Preferred scales"
 												:items="filteredScales"
 												multiple
-												:item-text="scaleName"
+												:item-title="scaleName"
 												:rules="[
 													rules.uniqueSensorType,
 												]"
 												chips
 												return-object
-												deletable-chips
+												closable-chips
 												v-model="newZwave.scales"
 											>
 												<template
-													v-slot:item="{
-														item,
-														attrs,
-														on,
-													}"
+													#item="{ item, props }"
 												>
 													<v-list-item
-														v-on="on"
-														v-bind="attrs"
-														two-line
+														v-bind="props"
+														:title="
+															scaleName(item.raw)
+														"
+														:subtitle="
+															item.raw
+																.description ||
+															''
+														"
 													>
-														<v-list-item-content>
-															<v-list-item-title
-																>{{
-																	scaleName(
-																		item,
-																	)
-																}}</v-list-item-title
-															>
-															<v-list-item-subtitle
-																>{{
-																	item.description ||
-																	''
-																}}</v-list-item-subtitle
-															>
-														</v-list-item-content>
 													</v-list-item>
 												</template>
 											</v-autocomplete>
@@ -1133,17 +1266,17 @@
 
 									<input
 										type="hidden"
-										:value="newZwave.options"
+										:modelValue="newZwave.options"
 									/>
 								</v-row>
 							</v-card-text>
 						</v-card>
-					</v-expansion-panel-content>
+					</v-expansion-panel-text>
 					<v-divider />
 				</v-expansion-panel>
 
 				<v-expansion-panel key="Zniffer">
-					<v-expansion-panel-header>
+					<v-expansion-panel-title>
 						<v-row no-gutters>
 							<v-col align-self="center">
 								<v-row align-self="center">
@@ -1161,16 +1294,16 @@
 								<v-btn
 									@click.stop="openDocs('zniffer')"
 									color="primary"
-									outlined
-									x-small
+									variant="outlined"
+									size="x-small"
 								>
 									Docs
-									<v-icon x-small right>launch</v-icon>
+									<v-icon size="x-small" end>launch</v-icon>
 								</v-btn>
 							</v-col>
 						</v-row>
-					</v-expansion-panel-header>
-					<v-expansion-panel-content v-if="newZniffer.enabled">
+					</v-expansion-panel-title>
+					<v-expansion-panel-text v-if="newZniffer.enabled">
 						<v-card flat>
 							<v-card-text>
 								<v-row>
@@ -1186,6 +1319,10 @@
 											]"
 											required
 											:items="serial_ports"
+											:loading="loadingSerialPorts"
+											@focus="loadSerialPorts"
+											append-icon="refresh"
+											@click:append="refreshSerialPorts"
 										></v-combobox>
 									</v-col>
 									<v-row
@@ -1193,21 +1330,21 @@
 										v-if="newZniffer.securityKeys"
 									>
 										<v-col cols="12">
-											<v-subheader
-												class="font-weight-bold primary--text"
+											<v-list-subheader
+												class="font-weight-bold text-primary"
 											>
 												Security Keys
 
 												<v-btn
 													class="ml-2"
-													small
-													outlined
+													size="small"
+													variant="outlined"
 													color="warning"
 													@click="copyKeysZniffer()"
 												>
 													Copy from Driver
 												</v-btn>
-											</v-subheader>
+											</v-list-subheader>
 										</v-col>
 										<v-col cols="12" sm="6">
 											<v-text-field
@@ -1232,13 +1369,13 @@
 													),
 												]"
 												persistent-hint
-												append-outer-icon="wifi_protected_setup"
+												append-icon="wifi_protected_setup"
 												:type="
 													streamerMode
 														? 'password'
 														: 'text'
 												"
-												@click:append-outer="
+												@click:append="
 													randomKey(
 														'S2_Unauthenticated',
 														newZniffer.securityKeys,
@@ -1269,13 +1406,13 @@
 														newZniffer.securityKeys,
 													),
 												]"
-												append-outer-icon="wifi_protected_setup"
+												append-icon="wifi_protected_setup"
 												:type="
 													streamerMode
 														? 'password'
 														: 'text'
 												"
-												@click:append-outer="
+												@click:append="
 													randomKey(
 														'S2_Authenticated',
 														newZniffer.securityKeys,
@@ -1305,13 +1442,13 @@
 														newZniffer.securityKeys,
 													),
 												]"
-												append-outer-icon="wifi_protected_setup"
+												append-icon="wifi_protected_setup"
 												:type="
 													streamerMode
 														? 'password'
 														: 'text'
 												"
-												@click:append-outer="
+												@click:append="
 													randomKey(
 														'S2_AccessControl',
 														newZniffer.securityKeys,
@@ -1337,13 +1474,13 @@
 														newZniffer.securityKeys,
 													),
 												]"
-												append-outer-icon="wifi_protected_setup"
+												append-icon="wifi_protected_setup"
 												:type="
 													streamerMode
 														? 'password'
 														: 'text'
 												"
-												@click:append-outer="
+												@click:append="
 													randomKey(
 														'S0_Legacy',
 														newZniffer.securityKeys,
@@ -1357,11 +1494,11 @@
 										v-if="newZniffer.securityKeysLongRange"
 									>
 										<v-col cols="12">
-											<v-subheader
-												class="font-weight-bold primary--text"
+											<v-list-subheader
+												class="font-weight-bold text-primary"
 											>
 												Security Keys (Long Range)
-											</v-subheader>
+											</v-list-subheader>
 										</v-col>
 										<v-col cols="12" sm="6">
 											<v-text-field
@@ -1387,13 +1524,13 @@
 														newZniffer.securityKeysLongRange,
 													),
 												]"
-												append-outer-icon="wifi_protected_setup"
+												append-icon="wifi_protected_setup"
 												:type="
 													streamerMode
 														? 'password'
 														: 'text'
 												"
-												@click:append-outer="
+												@click:append="
 													randomKey(
 														'S2_Authenticated',
 														newZniffer.securityKeysLongRange,
@@ -1424,13 +1561,13 @@
 														newZniffer.securityKeysLongRange,
 													),
 												]"
-												append-outer-icon="wifi_protected_setup"
+												append-icon="wifi_protected_setup"
 												:type="
 													streamerMode
 														? 'password'
 														: 'text'
 												"
-												@click:append-outer="
+												@click:append="
 													randomKey(
 														'S2_AccessControl',
 														newZniffer.securityKeysLongRange,
@@ -1522,14 +1659,14 @@
 											multiple
 											:rules="[rules.validNodeLog]"
 											chips
-											deletable-chips
+											closable-chips
 											v-model="newZniffer.nodeFilter"
 										></v-combobox>
 									</v-col>
 								</v-row>
 							</v-card-text>
 						</v-card>
-					</v-expansion-panel-content>
+					</v-expansion-panel-text>
 				</v-expansion-panel>
 			</v-expansion-panels>
 
@@ -1543,29 +1680,29 @@
 			</v-col>
 
 			<v-expansion-panels
-				accordion
+				variant="accordion"
 				multiple
 				flat
 				class="expansion-panels-outlined"
 			>
 				<v-expansion-panel key="mqtt" v-if="!newMqtt.disabled">
-					<v-expansion-panel-header>
+					<v-expansion-panel-title>
 						<v-row no-gutters>
 							<v-col align-self="center"> MQTT </v-col>
 							<v-col class="text-right pr-5">
 								<v-btn
 									@click.stop="openDocs('mqtt')"
 									color="primary"
-									outlined
-									x-small
+									variant="outlined"
+									size="x-small"
 								>
 									Docs
-									<v-icon x-small right>launch</v-icon>
+									<v-icon size="x-small" end>launch</v-icon>
 								</v-btn>
 							</v-col>
 						</v-row>
-					</v-expansion-panel-header>
-					<v-expansion-panel-content>
+					</v-expansion-panel-title>
+					<v-expansion-panel-text>
 						<v-card flat>
 							<v-card-text>
 								<v-row>
@@ -1738,28 +1875,28 @@
 								</v-row>
 							</v-card-text>
 						</v-card>
-					</v-expansion-panel-content>
+					</v-expansion-panel-text>
 					<v-divider />
 				</v-expansion-panel>
 
 				<v-expansion-panel key="gateway" v-if="!newMqtt.disabled">
-					<v-expansion-panel-header>
+					<v-expansion-panel-title>
 						<v-row no-gutters>
 							<v-col align-self="center"> Gateway </v-col>
 							<v-col class="text-right pr-5">
 								<v-btn
 									@click.stop="openDocs('gateway')"
 									color="primary"
-									outlined
-									x-small
+									variant="outlined"
+									size="x-small"
 								>
 									Docs
-									<v-icon x-small right>launch</v-icon>
+									<v-icon size="x-small" end>launch</v-icon>
 								</v-btn>
 							</v-col>
 						</v-row>
-					</v-expansion-panel-header>
-					<v-expansion-panel-content>
+					</v-expansion-panel-title>
+					<v-expansion-panel-text>
 						<v-card flat>
 							<v-card-text>
 								<v-row>
@@ -1838,32 +1975,40 @@
 								</v-row>
 							</v-card-text>
 						</v-card>
-					</v-expansion-panel-content>
+					</v-expansion-panel-text>
 					<v-divider />
 				</v-expansion-panel>
 
 				<v-expansion-panel key="Hass">
-					<v-expansion-panel-header>
+					<v-expansion-panel-title>
 						<v-row no-gutters>
 							<v-col align-self="center"> Home Assistant </v-col>
 							<v-col class="text-right pr-5">
 								<v-btn
 									@click.stop="openDocs('home-assistant')"
 									color="primary"
-									outlined
-									x-small
+									variant="outlined"
+									size="x-small"
 								>
 									Docs
-									<v-icon x-small right>launch</v-icon>
+									<v-icon size="x-small" end>launch</v-icon>
 								</v-btn>
 							</v-col>
 						</v-row>
-					</v-expansion-panel-header>
-					<v-expansion-panel-content>
+					</v-expansion-panel-title>
+					<v-expansion-panel-text>
 						<v-card flat>
 							<v-card-text>
-								<v-row>
-									<v-col cols="12" sm="6">
+								<v-row v-if="!allHassSettingsManagedExternally">
+									<v-col
+										cols="12"
+										sm="6"
+										v-if="
+											!isSettingManagedExternally(
+												'zwave.serverEnabled',
+											)
+										"
+									>
 										<v-switch
 											hint="Enable Z-Wave JS websocket server. This can be used with Home Assistant Z-Wave JS integration to discover entities"
 											persistent-hint
@@ -1872,7 +2017,12 @@
 										></v-switch>
 									</v-col>
 									<v-col
-										v-if="newZwave.serverEnabled"
+										v-if="
+											newZwave.serverEnabled &&
+											!isSettingManagedExternally(
+												'zwave.serverPort',
+											)
+										"
 										cols="6"
 									>
 										<v-text-field
@@ -1885,13 +2035,18 @@
 										></v-text-field>
 										<input
 											type="hidden"
-											:value="
+											:modelValue="
 												newZwave.serverServiceDiscoveryDisabled
 											"
 										/>
 									</v-col>
 									<v-col
-										v-if="newZwave.serverEnabled"
+										v-if="
+											newZwave.serverEnabled &&
+											!isSettingManagedExternally(
+												'zwave.serverHost',
+											)
+										"
 										cols="6"
 									>
 										<v-text-field
@@ -1901,7 +2056,12 @@
 										></v-text-field>
 									</v-col>
 									<v-col
-										v-if="newZwave.serverEnabled"
+										v-if="
+											newZwave.serverEnabled &&
+											!isSettingManagedExternally(
+												'zwave.serverServiceDiscoveryDisabled',
+											)
+										"
 										cols="6"
 									>
 										<inverted-checkbox
@@ -1995,7 +2155,7 @@
 								</v-row>
 							</v-card-text>
 						</v-card>
-					</v-expansion-panel-content>
+					</v-expansion-panel-text>
 				</v-expansion-panel>
 			</v-expansion-panels>
 
@@ -2010,57 +2170,67 @@
 			/>
 		</v-form>
 		<v-row
-			:justify="$vuetify.breakpoint.xsOnly ? 'center' : 'end'"
+			:justify="$vuetify.display.xs ? 'center' : 'end'"
 			space-be
 			class="sticky-buttons py-3 px-4"
 			:style="{
-				backgroundColor: internalDarkMode ? '#272727' : '#f5f5f5',
+				backgroundColor: darkMode ? '#272727' : '#f5f5f5',
 			}"
 		>
-			<v-btn class="mr-2" small color="red darken-1" @click="resetConfig">
+			<v-btn
+				class="mr-2"
+				size="small"
+				color="error"
+				@click="resetConfig()"
+			>
 				Reset
-				<v-icon right dark>clear</v-icon>
+				<v-icon end>clear</v-icon>
 			</v-btn>
 			<v-btn
 				class="mr-2"
-				small
-				color="purple darken-1"
+				size="small"
+				color="purple"
 				@click="importSettings"
 			>
 				Import
-				<v-icon right dark>file_upload</v-icon>
+				<v-icon end>file_upload</v-icon>
 			</v-btn>
 			<v-btn
 				class="mr-2"
-				small
-				color="green darken-1"
+				size="small"
+				color="success"
 				@click="exportSettings"
 			>
 				Export
-				<v-icon right dark>file_download</v-icon>
+				<v-icon end>file_download</v-icon>
 			</v-btn>
 			<v-btn
 				class="mr-5"
-				small
-				color="blue darken-1"
+				size="small"
+				color="primary"
 				type="submit"
 				:loading="saving"
 				:disabled="saving || !settingsChanged"
 				form="form_settings"
 			>
 				Save
-				<v-icon right dark>save</v-icon>
+				<v-icon end>save</v-icon>
 			</v-btn>
 		</v-row>
 	</v-container>
 </template>
 
 <script>
+import { defineAsyncComponent } from 'vue'
 import { mapActions, mapState } from 'pinia'
 import ConfigApis from '@/apis/ConfigApis'
 import { parse } from 'native-url'
 import { wait, copy, isUndef, deepEqual } from '../lib/utils'
-import { rfRegions, znifferRegions, maxLRPowerLevels } from '../lib/items'
+import {
+	settingsRfRegions,
+	znifferRegions,
+	maxLRPowerLevels,
+} from '../lib/items'
 import cronstrue from 'cronstrue'
 import useBaseStore from '../stores/base'
 
@@ -2073,11 +2243,18 @@ export default {
 	name: 'Settings',
 	mixins: [InstancesMixin],
 	components: {
-		DialogGatewayValue: () =>
-			import('@/components/dialogs/DialogGatewayValue.vue'),
-		fileInput: () => import('@/components/custom/file-input.vue'),
-		invertedCheckbox: () =>
-			import('@/components/custom/InvertedCheckbox.vue'),
+		ColorScheme: defineAsyncComponent(
+			() => import('@/components/custom/ColorScheme.vue'),
+		),
+		DialogGatewayValue: defineAsyncComponent(
+			() => import('@/components/dialogs/DialogGatewayValue.vue'),
+		),
+		fileInput: defineAsyncComponent(
+			() => import('@/components/custom/file-input.vue'),
+		),
+		invertedCheckbox: defineAsyncComponent(
+			() => import('@/components/custom/InvertedCheckbox.vue'),
+		),
 	},
 	props: {
 		socket: {
@@ -2086,12 +2263,12 @@ export default {
 		},
 	},
 	computed: {
-		internalDarkMode: {
+		internalColorScheme: {
 			get() {
-				return this.darkMode
+				return this.colorScheme
 			},
 			set(value) {
-				this.setDarkMode(value)
+				this.setColorScheme(value)
 			},
 		},
 		internalNavTabs: {
@@ -2102,12 +2279,36 @@ export default {
 				this.setNavTabs(value)
 			},
 		},
+		internalShowTabLabels: {
+			get() {
+				return this.showTabLabels
+			},
+			set(value) {
+				this.setShowTabLabels(value)
+			},
+		},
 		internalStreamerMode: {
 			get() {
 				return this.streamerMode
 			},
 			set(value) {
 				this.setStreamerMode(value)
+			},
+		},
+		internalCompactMode: {
+			get() {
+				return this.compactMode
+			},
+			set(value) {
+				this.setCompactMode(value)
+			},
+		},
+		internalBrowserTitle: {
+			get() {
+				return this.ui.browserTitle || 'Z-Wave JS UI'
+			},
+			set(value) {
+				this.setBrowserTitle(value)
 			},
 		},
 		settingsChanged() {
@@ -2199,11 +2400,68 @@ export default {
 			'serial_ports',
 			'scales',
 			'ui',
+			'isSettingManagedExternally',
 		]),
+		allClassicSecurityKeysManagedExternally() {
+			return (
+				this.isSettingManagedExternally(
+					'zwave.securityKeys.S0_Legacy',
+				) &&
+				this.isSettingManagedExternally(
+					'zwave.securityKeys.S2_Unauthenticated',
+				) &&
+				this.isSettingManagedExternally(
+					'zwave.securityKeys.S2_Authenticated',
+				) &&
+				this.isSettingManagedExternally(
+					'zwave.securityKeys.S2_AccessControl',
+				)
+			)
+		},
+		allLRSecurityKeysManagedExternally() {
+			return (
+				this.isSettingManagedExternally(
+					'zwave.securityKeysLongRange.S2_Authenticated',
+				) &&
+				this.isSettingManagedExternally(
+					'zwave.securityKeysLongRange.S2_AccessControl',
+				)
+			)
+		},
+		allRfSettingsManagedExternally() {
+			return (
+				this.isSettingManagedExternally('zwave.rf.region') &&
+				this.isSettingManagedExternally('zwave.rf.autoPowerlevels')
+			)
+		},
+		allLogSettingsManagedExternally() {
+			return (
+				this.isSettingManagedExternally('zwave.logEnabled') &&
+				this.isSettingManagedExternally('zwave.logLevel') &&
+				this.isSettingManagedExternally('zwave.logToFile') &&
+				this.isSettingManagedExternally('zwave.maxFiles')
+			)
+		},
+		allHassSettingsManagedExternally() {
+			return (
+				this.isSettingManagedExternally('zwave.serverEnabled') &&
+				this.isSettingManagedExternally('zwave.serverPort') &&
+				this.isSettingManagedExternally('zwave.serverHost') &&
+				this.isSettingManagedExternally(
+					'zwave.serverServiceDiscoveryDisabled',
+				)
+			)
+		},
+		isPortManagedExternally() {
+			return this.isSettingManagedExternally('zwave.port')
+		},
 		...mapState(useBaseStore, {
-			darkMode: (store) => store.ui.darkMode,
+			colorScheme: (store) => store.ui.colorScheme,
+			darkMode: (store) => store.uiState.darkMode,
 			navTabs: (store) => store.ui.navTabs,
+			showTabLabels: (store) => store.ui.showTabLabels,
 			streamerMode: (store) => store.ui.streamerMode,
+			compactMode: (store) => store.ui.compactMode,
 		}),
 	},
 	watch: {
@@ -2213,13 +2471,15 @@ export default {
 	},
 	data() {
 		return {
-			rfRegions,
+			rfRegions: settingsRfRegions,
 			znifferRegions,
 			maxLRPowerLevels,
 			valid_zwave: true,
 			dialogValue: false,
 			sslDisabled: false,
 			saving: false,
+			loadingSerialPorts: false,
+			serialPortsFetched: false,
 			prevUi: null,
 			newGateway: {},
 			newMqtt: {},
@@ -2234,56 +2494,56 @@ export default {
 			editedIndex: -1,
 			defaultValue: {},
 			logLevels: [
-				{ text: 'Error', value: 'error' },
-				{ text: 'Warn', value: 'warn' },
-				{ text: 'Info', value: 'info' },
-				{ text: 'Verbose', value: 'verbose' },
-				{ text: 'Debug', value: 'debug' },
-				{ text: 'Silly', value: 'silly' },
+				{ title: 'Error', value: 'error' },
+				{ title: 'Warn', value: 'warn' },
+				{ title: 'Info', value: 'info' },
+				{ title: 'Verbose', value: 'verbose' },
+				{ title: 'Debug', value: 'debug' },
+				{ title: 'Silly', value: 'silly' },
 			],
 			headers: [
-				{ text: 'Device', value: 'device' },
-				{ text: 'Value', value: 'value', sortable: false },
-				{ text: 'Topic', value: 'topic' },
-				{ text: 'Post Operation', value: 'postOperation' },
-				{ text: 'Poll', value: 'enablePoll' },
-				// { text: 'Changes', value: 'verifyChanges' },
-				{ text: 'Actions', value: 'actions', sortable: false },
+				{ title: 'Device', key: 'device' },
+				{ title: 'Value', key: 'value', sortable: false },
+				{ title: 'Topic', key: 'topic' },
+				{ title: 'Post Operation', key: 'postOperation' },
+				{ title: 'Poll', key: 'enablePoll' },
+				// { title: 'Changes', key: 'verifyChanges' },
+				{ title: 'Actions', key: 'actions', sortable: false },
 			],
 			headersJobs: [
-				{ text: 'Name', value: 'name' },
-				{ text: 'Enabled', value: 'enabled' },
-				{ text: 'On Init', value: 'runOnInit' },
-				{ text: 'Code', value: 'code' },
-				{ text: 'Cron', value: 'cron' },
-				{ text: 'Actions', value: 'actions', sortable: false },
+				{ title: 'Name', key: 'name' },
+				{ title: 'Enabled', key: 'enabled' },
+				{ title: 'On Init', key: 'runOnInit' },
+				{ title: 'Code', key: 'code' },
+				{ title: 'Cron', key: 'cron' },
+				{ title: 'Actions', key: 'actions', sortable: false },
 			],
 			e1: true,
 			gw_types: [
 				{
-					text: 'ValueID topics',
+					title: 'ValueID topics',
 					value: 0,
 				},
 				{
-					text: 'Named topics',
+					title: 'Named topics',
 					value: 1,
 				},
 				{
-					text: 'Configured Manually',
+					title: 'Configured Manually',
 					value: 2,
 				},
 			],
 			py_types: [
 				{
-					text: 'JSON Time-Value',
+					title: 'JSON Time-Value',
 					value: 0,
 				},
 				{
-					text: 'Entire Z-Wave value Object',
+					title: 'Entire Z-Wave value Object',
 					value: 1,
 				},
 				{
-					text: 'Just value',
+					title: 'Just value',
 					value: 2,
 				},
 			],
@@ -2357,12 +2617,14 @@ export default {
 	},
 	methods: {
 		...mapActions(useBaseStore, [
-			'setDarkMode',
+			'setColorScheme',
 			'setNavTabs',
+			'setShowTabLabels',
 			'setStreamerMode',
+			'setCompactMode',
+			'setBrowserTitle',
 			'initSettings',
 			'init',
-			'showSnackbar',
 		]),
 		copyKeysZniffer() {
 			this.newZniffer.securityKeys = copy(this.newZwave.securityKeys)
@@ -2373,22 +2635,25 @@ export default {
 		validTxPower() {
 			const { powerlevel, measured0dBm } = this.newZwave.rf?.txPower ?? {}
 
-			const validPower = !isUndef(powerlevel)
-			const validMeasured = !isUndef(measured0dBm)
-
-			if (validPower && (powerlevel < -10 || powerlevel > 20)) {
-				return 'Power level must be between -10 and 20'
+			// The calibration value is optional
+			if (
+				typeof measured0dBm === 'number' &&
+				(measured0dBm < -10 || measured0dBm > 10)
+			) {
+				return 'Measured @ 0dBm must be between -10 and 10'
 			}
 
-			if (validMeasured && (measured0dBm < -10 || measured0dBm > 10)) {
-				return 'Measured 0dBm must be between -10 and 10'
+			if (isUndef(powerlevel) || powerlevel === 'auto') {
+				return
 			}
 
-			return (
-				(validPower && validMeasured) ||
-				(!validPower && !validMeasured) ||
-				'Both powerlevel and measured 0 dBm must be set when using custom TX power'
-			)
+			if (
+				typeof powerlevel !== 'number' ||
+				powerlevel < -10 ||
+				powerlevel > 20
+			) {
+				return 'Powerlevel must be between -10 and 20'
+			}
 		},
 		parseCron(cron) {
 			let res
@@ -2418,7 +2683,7 @@ export default {
 
 			if (data) {
 				data = data.replace(/0x|,|\s/gi, '')
-				this.$set(obj, key, data)
+				obj[key] = data.toUpperCase()
 				event.preventDefault()
 			}
 		},
@@ -2453,7 +2718,7 @@ export default {
 				key += x.length === 2 ? x : '0' + x
 			}
 
-			this.$set(obj, k, key)
+			obj[k] = key
 		},
 		readFile(file, callback) {
 			const reader = new FileReader()
@@ -2473,7 +2738,7 @@ export default {
 			try {
 				const { data } = await this.app.importFile('json')
 				if (data.zwave && data.mqtt && data.gateway) {
-					this.initSettings(data)
+					this.resetConfig(data)
 					this.showSnackbar(
 						'Configuration imported successfully',
 						'success',
@@ -2635,7 +2900,8 @@ export default {
 		async update() {
 			// let inputs to unfocus and trigger any change event, nextTick is not working here
 			await wait(200)
-			if (this.$refs.form_settings.validate()) {
+			const result = await this.$refs.form_settings.validate()
+			if (result.valid) {
 				try {
 					this.saving = true
 					useBaseStore().resetNodes()
@@ -2643,12 +2909,61 @@ export default {
 						this.getSettingsJSON(),
 					)
 					this.saving = false
+
+					// Show success message
 					this.showSnackbar(
 						data.message,
 						data.success ? 'success' : 'error',
 					)
+
 					this.initSettings(data.data)
+					// Update prevUi to the new saved values
+					this.prevUi = copy(this.ui)
+					this.resetConfig()
+
+					// If restart is required, ask user
+					if (data.success && data.shouldRestart) {
+						const restartConfirm = await this.app.confirm(
+							'Restart Required',
+							'Do you want to restart the Z-Wave JS driver to apply the changes?',
+							'info',
+							{
+								width: 500,
+								inputs: [
+									{
+										type: 'checkbox',
+										key: 'restart',
+										label: 'Restart Z-Wave JS driver',
+										default: true,
+										hint: 'Changes require a restart to take effect. Uncheck to restart manually later.',
+									},
+								],
+							},
+						)
+
+						// If user confirmed restart
+						if (restartConfirm?.restart) {
+							try {
+								this.saving = true
+								const restartData =
+									await ConfigApis.restartGateway()
+								this.saving = false
+								this.showSnackbar(
+									restartData.message,
+									restartData.success ? 'success' : 'error',
+								)
+							} catch (error) {
+								this.saving = false
+								this.showSnackbar(
+									'Failed to restart gateway',
+									'error',
+								)
+								log.error(error)
+							}
+						}
+					}
 				} catch (error) {
+					this.saving = false
 					log.error(error)
 				}
 			} else {
@@ -2658,23 +2973,40 @@ export default {
 				)
 			}
 		},
-		resetConfig() {
-			this.newGateway = copy(this.gateway)
-			this.newZwave = copy(this.zwave)
-			this.newZniffer = copy(this.zniffer)
-			this.newMqtt = copy(this.mqtt)
-			this.newBackup = copy(this.backup)
-
-			if (this.prevUi) {
-				this.internalDarkMode = this.prevUi.darkMode
-				this.internalNavTabs = this.prevUi.navTabs
-				this.internalStreamerMode = this.prevUi.streamerMode
-			} else {
-				this.prevUi = copy(this.ui)
+		resetConfig(importedSettings) {
+			const settings = {
+				mqtt: this.mqtt,
+				gateway: this.gateway,
+				zwave: this.zwave,
+				zniffer: this.zniffer,
+				backup: this.backup,
+				ui: this.ui,
+				...(importedSettings || {}),
 			}
+			this.newGateway = copy(settings.gateway)
+			this.newZwave = copy(settings.zwave)
+			this.newZniffer = copy(settings.zniffer)
+			this.newMqtt = copy(settings.mqtt)
+			this.newBackup = copy(settings.backup)
+
+			// `prevUi` is used as backup of the initial UI status as
+			// base store `ui is updated every time the user changes UI settings
+			if (this.prevUi === null) {
+				this.prevUi = copy(settings.ui)
+			}
+
+			const uiState = importedSettings?.ui || this.prevUi
+
+			// set UI computed props. This props will also update base store `ui` props
+			this.internalColorScheme = uiState.colorScheme
+			this.internalNavTabs = uiState.navTabs
+			this.internalStreamerMode = uiState.streamerMode
+			this.internalCompactMode = uiState.compactMode
+			this.internalBrowserTitle = uiState.browserTitle
 		},
 		async getConfig() {
 			try {
+				// Load settings first (fast)
 				const data = await ConfigApis.getConfig()
 				if (!data.success) {
 					this.showSnackbar(
@@ -2682,14 +3014,40 @@ export default {
 						'error',
 					)
 					log.error(data)
-				} else {
-					this.init(data)
-					this.sslDisabled = data.sslDisabled
-					this.resetConfig()
+					return
 				}
+
+				this.init(data)
+				this.sslDisabled = data.sslDisabled
+				this.resetConfig()
+
+				// Serial ports are loaded lazily when the input is focused
 			} catch (error) {
 				this.showSnackbar(error.message, 'error')
 				log.error(error)
+			}
+		},
+		async loadSerialPorts() {
+			if (this.serialPortsFetched || this.loadingSerialPorts) return
+			await this.fetchSerialPorts()
+		},
+		async refreshSerialPorts() {
+			if (this.loadingSerialPorts) return
+			this.serialPortsFetched = false
+			await this.fetchSerialPorts()
+		},
+		async fetchSerialPorts() {
+			this.loadingSerialPorts = true
+			try {
+				const data = await ConfigApis.getSerialPorts()
+				if (data.success && data.serial_ports) {
+					useBaseStore().initPorts(data.serial_ports)
+				}
+				this.serialPortsFetched = true
+			} catch (error) {
+				log.error('Failed to load serial ports:', error)
+			} finally {
+				this.loadingSerialPorts = false
 			}
 		},
 	},

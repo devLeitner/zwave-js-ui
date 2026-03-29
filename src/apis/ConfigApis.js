@@ -2,6 +2,7 @@ import axios from 'axios'
 import loadProgressBar from '../lib/axios-progress-bar'
 import Router from '../router'
 import logger from '../lib/logger'
+import { download, extractFileNameFromResponse } from '../lib/utils'
 
 const log = logger.get('ConfigApis')
 
@@ -87,8 +88,16 @@ export default {
 		const response = await request.get('/settings')
 		return response.data
 	},
+	async getSerialPorts() {
+		const response = await request.get('/serial-ports')
+		return response.data
+	},
 	async updateConfig(data) {
 		const response = await request.post('/settings', data)
+		return response.data
+	},
+	async restartGateway() {
+		const response = await request.post('/restart')
 		return response.data
 	},
 	async updateStats(enableStatistics) {
@@ -151,6 +160,99 @@ export default {
 	},
 	async updateVersions(disableChangelog = false) {
 		const response = await request.post('/versions', { disableChangelog })
+		return response.data
+	},
+	// ---- DEBUG CAPTURE -----
+	async getDebugStatus() {
+		const response = await request.get('/debug/status')
+		return response.data
+	},
+	async startDebugCapture(restartDriver = false) {
+		const response = await request.post('/debug/start', { restartDriver })
+		return response.data
+	},
+	async stopDebugCapture(nodeIds = []) {
+		const response = await axios({
+			method: 'post',
+			url: '/debug/stop',
+			data: { nodeIds },
+			responseType: 'blob',
+		})
+
+		// try parsing response as json to check for errors
+		try {
+			const text = await response.data.text()
+			const data = JSON.parse(text)
+			// if we get here, the response was json and thus an error
+			log.error('Error during debug capture:', data)
+			throw new Error(
+				data.message || 'An error occurred during debug capture',
+			)
+		} catch (error) {
+			// only ignore json parse errors, rethrow everything else
+			if (!(error instanceof SyntaxError)) {
+				throw error
+			}
+		}
+
+		// Trigger download
+		const url = window.URL.createObjectURL(new Blob([response.data]))
+
+		// Get filename from Content-Disposition header
+		const fileName = extractFileNameFromResponse(
+			response,
+			`debug-capture_${new Date().toISOString()}.zip`,
+		)
+
+		download(url, fileName)
+
+		return { success: true }
+	},
+	async cancelDebugCapture() {
+		const response = await request.post('/debug/cancel')
+		return response.data
+	},
+	// ---- CONFIGURATION TEMPLATES -----
+	async getConfigurationTemplates() {
+		const response = await request.get('/configuration-templates')
+		return response.data
+	},
+	async createConfigurationTemplate(data) {
+		const response = await request.post('/configuration-templates', data)
+		return response.data
+	},
+	async updateConfigurationTemplate(id, data) {
+		const response = await request.put(
+			`/configuration-templates/${id}`,
+			data,
+		)
+		return response.data
+	},
+	async deleteConfigurationTemplate(id) {
+		const response = await request.delete(`/configuration-templates/${id}`)
+		return response.data
+	},
+	async applyConfigurationTemplate(id, nodeId) {
+		const response = await request.post(
+			`/configuration-templates/${id}/apply`,
+			{ nodeId },
+		)
+		return response.data
+	},
+	async exportConfigurationTemplates() {
+		const response = await request.get('/configuration-templates/export')
+		return response.data
+	},
+	async importConfigurationTemplates(data) {
+		const response = await request.post('/configuration-templates/import', {
+			data,
+		})
+		return response.data
+	},
+	async getDeviceConfigurationParams(deviceId) {
+		const response = await request.get(
+			`/configuration-templates/device-params/${deviceId}`,
+		)
 		return response.data
 	},
 }

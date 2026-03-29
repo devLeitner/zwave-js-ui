@@ -1,22 +1,26 @@
 'use strict'
 
-import {
+import type {
 	MqttClient as Client,
 	IClientOptions,
 	IClientPublishOptions,
 	IClientSubscribeOptions,
-	connect,
 } from 'mqtt'
-import { allSettled, parseJSON, sanitizeTopic, pkgJson } from './utils'
-import { module } from './logger'
-import { TypedEventEmitter } from './EventEmitter'
-import { storeDir } from '../config/app'
-import { ensureDir } from 'fs-extra'
+import { connect } from 'mqtt'
+import {
+	allSettled,
+	parseJSON,
+	sanitizeTopic,
+	pkgJson,
+	stringifyJSON,
+} from './utils.ts'
+import { module } from './logger.ts'
+import { TypedEventEmitter } from './EventEmitter.ts'
+import { storeDir } from '../config/app.ts'
+import { ensureDir } from './utils.ts'
 import { Manager } from 'mqtt-jsonl-store'
-import { join } from 'path'
-
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const url = require('native-url')
+import { join } from 'node:path'
+import url from 'native-url'
 
 const logger = module('Mqtt')
 
@@ -311,7 +315,7 @@ class MqttClient extends TypedEventEmitter<MqttClientEventCallbacks> {
 
 			this.client.publish(
 				topic,
-				JSON.stringify(data),
+				stringifyJSON(data),
 				options,
 				function (err) {
 					if (err) {
@@ -529,7 +533,10 @@ class MqttClient extends TypedEventEmitter<MqttClientEventCallbacks> {
 
 		// It's an action
 		if (parts[0] === MqttClient.CLIENTS_PREFIX) {
-			if (parts.length < 3) return
+			if (parts.length < 3 || parts[1] !== this._clientID) {
+				// it could be we receive a message from another Z-UI client, ignore it
+				return
+			}
 
 			const action = MqttClient.ACTIONS.indexOf(parts[2])
 

@@ -1,15 +1,15 @@
 import { expect } from 'chai'
-import * as utils from '../../api/lib/utils'
-import { logsDir } from '../../api/config/app'
+import * as utils from '../../api/lib/utils.ts'
+import { logsDir } from '../../api/config/app.ts'
+import type { ModuleLogger } from '../../api/lib/logger.ts'
 import {
 	customTransports,
 	defaultLogFile,
-	ModuleLogger,
 	sanitizedConfig,
 	module,
 	setupAll,
 	stopCleanJob,
-} from '../../api/lib/logger'
+} from '../../api/lib/logger.ts'
 import winston from 'winston'
 
 function checkConfigDefaults(mod, cfg) {
@@ -69,7 +69,7 @@ describe('logger.js', () => {
 		it('should have a cfg function', () =>
 			expect(typeof logger1.setup).to.equal('function'))
 		it('should have logging enabled by default', () =>
-			expect(logger1.silent).to.be.false)
+			expect(logger1.transports.every((t) => !t.silent)).to.be.true)
 		it('should have the default log level', () =>
 			expect(logger1.level).to.equal('info'))
 		it('should have one transport only', () =>
@@ -89,7 +89,14 @@ describe('logger.js', () => {
 			expect(logger1).to.be.equal(logger2))
 		it('should set the module name', () =>
 			expect(logger1.module).to.equal('bar'))
-		it('should disable logging', () => expect(logger1.silent).to.be.true)
+		it('should disable logging', () =>
+			expect(
+				logger1.transports.some(
+					(t) =>
+						t instanceof winston.transports.Stream ||
+						t.silent === true,
+				),
+			).to.be.true)
 		it('should change the log level', () =>
 			expect(logger1.level).to.equal('warn'))
 		it('should have 2 transports', () =>
@@ -143,7 +150,7 @@ describe('logger.js', () => {
 			expect(logger2.transports.length).to.be.equal(2)
 			// Change logger configuration:
 			setupAll({
-				logEnabled: false,
+				logEnabled: true,
 				logLevel: 'error',
 				logToFile: true,
 			})
@@ -154,6 +161,27 @@ describe('logger.js', () => {
 			expect(logger2.module).to.equal('mod2')
 			expect(logger2.level).to.equal('error')
 			expect(logger2.transports.length).to.be.equal(3)
+		})
+		it('should not create file transport when logEnabled is false', () => {
+			logger1 = module('mod3').setup({
+				logEnabled: true,
+				logLevel: 'warn',
+				logToFile: true,
+			})
+			// Test pre-conditions:
+			expect(logger1.module).to.equal('mod3')
+			expect(logger1.level).to.equal('warn')
+			expect(logger1.transports.length).to.be.equal(3)
+			// Change logger configuration:
+			setupAll({
+				logEnabled: false,
+				logLevel: 'error',
+				logToFile: true,
+			})
+			// Test post-conditions: file transport should not be created when logEnabled is false
+			expect(logger1.module).to.equal('mod3')
+			expect(logger1.level).to.equal('error')
+			expect(logger1.transports.length).to.be.equal(2)
 		})
 		it('should not change the logger config of non-zwave-js-ui loggers', () => {
 			logger1 = module('mod1').setup({

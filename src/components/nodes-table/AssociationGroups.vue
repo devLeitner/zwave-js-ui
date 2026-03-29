@@ -1,63 +1,81 @@
 <template>
 	<v-container grid-list-md>
 		<v-row justify="center" class="pa-5">
+			<v-alert
+				v-if="showAssociationWarning"
+				type="warning"
+				variant="tonal"
+				class="mb-4"
+				closable
+			>
+				<template #title>
+					<strong>Limited Association Support</strong>
+				</template>
+				{{ associationWarningMessage }}
+			</v-alert>
+
 			<v-data-table
 				:headers="headers"
 				:items="associations"
 				item-key="id"
 				class="elevation-1"
 			>
-				<template v-slot:top>
-					<v-btn
-						text
-						color="green"
-						@click="dialogAssociation = true"
-						class="mb-2"
-						>Add</v-btn
-					>
-					<v-btn
-						text
-						color="red"
-						@click="removeAllAssociations"
-						class="mb-2"
-						>Remove All</v-btn
-					>
-					<v-btn
-						text
-						color="primary"
-						@click="getAssociations(true)"
-						class="mb-2"
-						>Refresh</v-btn
-					>
+				<template #top>
+					<div class="d-flex">
+						<v-btn
+							variant="text"
+							color="success"
+							@click="dialogAssociation = true"
+							class="mb-2"
+							>Add</v-btn
+						>
+						<v-btn
+							variant="text"
+							color="error"
+							@click="removeAllAssociations"
+							class="mb-2"
+							>Remove All</v-btn
+						>
+						<v-btn
+							variant="text"
+							color="primary"
+							@click="getAssociations(true)"
+							class="mb-2"
+							>Refresh</v-btn
+						>
+					</div>
 				</template>
-				<template v-slot:[`item.groupId`]="{ item }">
+				<template #[`item.groupId`]="{ item }">
 					{{
 						node.groups.find(
 							(g) =>
 								g.value === item.groupId &&
 								g.endpoint === item.endpoint,
-						).text
+						).title
 					}}
 				</template>
-				<template v-slot:[`item.nodeId`]="{ item }">
+				<template #[`item.nodeId`]="{ item }">
 					{{ getNodeName(item.nodeId) }}
 				</template>
-				<template v-slot:[`item.endpoint`]="{ item }">
+				<template #[`item.endpoint`]="{ item }">
 					{{
 						item.endpoint >= 0
 							? getEndpointLabel(node.id, item.endpoint)
 							: 'None'
 					}}
 				</template>
-				<template v-slot:[`item.targetEndpoint`]="{ item }">
+				<template #[`item.targetEndpoint`]="{ item }">
 					{{
 						item.targetEndpoint >= 0
 							? getEndpointLabel(item.nodeId, item.targetEndpoint)
 							: 'None'
 					}}
 				</template>
-				<template v-slot:[`item.actions`]="{ item }">
-					<v-icon small color="red" @click="removeAssociation(item)"
+				<template #[`item.actions`]="{ item }">
+					<v-icon
+						size="small"
+						color="error"
+						@click="removeAssociation(item)"
 						>delete</v-icon
 					>
 				</template>
@@ -75,18 +93,21 @@
 </template>
 
 <script>
-import { mapState, mapActions } from 'pinia'
+import { mapState } from 'pinia'
 
 import useBaseStore from '../../stores/base.js'
 import InstancesMixin from '../../mixins/InstancesMixin.js'
-import { getEnumMemberName } from 'zwave-js/safe'
-import { AssociationCheckResult } from '@zwave-js/cc/safe'
+import { getEnumMemberName } from '@zwave-js/shared'
+import { AssociationCheckResult } from '@zwave-js/cc'
 import { getAssociationAddress } from '../../lib/utils'
+import { defineAsyncComponent } from 'vue'
+import { Protocols } from '@zwave-js/core'
 
 export default {
 	components: {
-		DialogAssociation: () =>
-			import('@/components/dialogs/DialogAssociation.vue'),
+		DialogAssociation: defineAsyncComponent(
+			() => import('@/components/dialogs/DialogAssociation.vue'),
+		),
 	},
 	mixins: [InstancesMixin],
 	props: {
@@ -97,22 +118,30 @@ export default {
 			associations: [],
 			dialogAssociation: false,
 			headers: [
-				{ text: 'Endpoint', value: 'endpoint' },
-				{ text: 'Group', value: 'groupId' },
-				{ text: 'Node', value: 'nodeId' },
-				{ text: 'Target Endpoint', value: 'targetEndpoint' },
-				{ text: 'Actions', value: 'actions', sortable: false },
+				{ title: 'Endpoint', key: 'endpoint' },
+				{ title: 'Group', key: 'groupId' },
+				{ title: 'Node', key: 'nodeId' },
+				{ title: 'Target Endpoint', key: 'targetEndpoint' },
+				{ title: 'Actions', key: 'actions', sortable: false },
 			],
 		}
 	},
 	computed: {
 		...mapState(useBaseStore, ['nodes', 'nodesMap']),
+		isLongRange() {
+			return this.node?.protocol === Protocols.ZWaveLongRange
+		},
+		showAssociationWarning() {
+			return this.isLongRange
+		},
+		associationWarningMessage() {
+			return 'This Z-Wave Long Range node only supports lifeline associations. Non-lifeline associations may not function correctly.'
+		},
 	},
 	mounted() {
 		this.getAssociations()
 	},
 	methods: {
-		...mapActions(useBaseStore, ['showSnackbar']),
 		getAssociationAddress,
 		getNodeName(nodeId) {
 			const node = this.nodes[this.nodesMap.get(nodeId)]
@@ -156,7 +185,7 @@ export default {
 				this.showSnackbar('Associations updated', 'success')
 			}
 		},
-		async addAssociation(association) {
+		async addAssociation(association, force = false) {
 			const target = !isNaN(association.target)
 				? parseInt(association.target)
 				: association.target.id
@@ -176,6 +205,7 @@ export default {
 				}),
 				group.value,
 				[toAdd],
+				force ? { force: true } : undefined,
 			]
 
 			const response = await this.app.apiRequest('addAssociations', args)
@@ -183,7 +213,7 @@ export default {
 			if (response.success) {
 				const checkResult = response.result[0]
 
-				if (checkResult === AssociationCheckResult.OK) {
+				if (checkResult === AssociationCheckResult.OK || force) {
 					this.showSnackbar('Association added', 'success')
 					this.getAssociations()
 				} else {

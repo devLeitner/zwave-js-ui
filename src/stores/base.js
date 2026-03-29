@@ -1,5 +1,11 @@
 import { defineStore } from 'pinia'
-import { $set, deepEqual } from '../lib/utils'
+import {
+	colorSchemeToDarkMode,
+	loadColorScheme,
+	prefersColorSchemeDark,
+} from '../lib/colorScheme'
+import { deepEqual } from '../lib/utils'
+import { manager, instances } from '../lib/instanceManager'
 import logger from '../lib/logger'
 
 import { Settings } from '../modules/Settings'
@@ -14,12 +20,14 @@ const useBaseStore = defineStore('base', {
 		auth: undefined,
 		controllerId: undefined,
 		serial_ports: [],
+		managedExternally: [],
 		scales: [],
 		nodes: [],
 		nodesMap: new Map(),
 		user: {},
 		tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
 		locale: undefined, // uses default browser locale
+		debugCaptureActive: false, // Track if debug capture is active
 		preferences: settings.load('preferences', {
 			eventsList: {},
 			smartStartTable: {},
@@ -32,9 +40,10 @@ const useBaseStore = defineStore('base', {
 			logLevel: 'debug',
 			rf: {
 				region: undefined,
-				maxLongRangePowerlevel: undefined,
+				maxLongRangePowerlevel: 'auto',
+				autoPowerlevels: true,
 				txPower: {
-					powerlevel: undefined,
+					powerlevel: 'auto',
 					measured0dBm: undefined,
 				},
 			},
@@ -55,6 +64,7 @@ const useBaseStore = defineStore('base', {
 			serverEnabled: false,
 			serverServiceDiscoveryDisabled: false,
 			enableSoftReset: true,
+			disableOptimisticValueUpdate: false,
 			enableStatistics: undefined, // keep it undefined so the user dialog will show up
 			serverPort: 3000,
 			serverHost: undefined,
@@ -62,6 +72,7 @@ const useBaseStore = defineStore('base', {
 			higherReportsTimeout: false,
 			disableControllerRecovery: false,
 			disableWatchdog: false,
+			disableAutomaticFirmwareUpdateChecks: false,
 		},
 		backup: {
 			storeBackup: false,
@@ -133,13 +144,22 @@ const useBaseStore = defineStore('base', {
 		znifferState: {
 			error: '',
 			started: false,
+			supportedFrequencies: {},
 			frequency: false,
+			lrRegions: [],
+			supportedLRChannelConfigs: {},
+			lrChannelConfig: false,
 		},
 		ui: {
-			darkMode: settings.load('dark', false),
+			colorScheme: loadColorScheme(settings),
 			navTabs: settings.load('navTabs', false),
+			showTabLabels: settings.load('showTabLabels', false),
 			compactMode: settings.load('compact', false),
 			streamerMode: settings.load('streamerMode', false),
+			browserTitle: settings.load('browserTitle', 'Z-Wave JS UI'),
+		},
+		uiState: {
+			darkMode: colorSchemeToDarkMode(loadColorScheme(settings)),
 		},
 	}),
 	getters: {
@@ -148,6 +168,11 @@ const useBaseStore = defineStore('base', {
 		},
 		settings() {
 			return settings
+		},
+		isSettingManagedExternally() {
+			return (settingPath) => {
+				return this.managedExternally.includes(settingPath)
+			}
 		},
 	},
 	actions: {
@@ -176,11 +201,7 @@ const useBaseStore = defineStore('base', {
 				return null
 			}
 		},
-		// eslint-disable-next-line no-unused-vars
-		showSnackbar(text, color = 'info', timeout = 3000) {
-			// empty mutation, will be caught in App.vue $onAction
-		},
-		// eslint-disable-next-line no-unused-vars
+
 		updateMeshGraph(node) {
 			// empty mutation, will be caught in Mesh.vue $onAction
 		},
@@ -330,7 +351,7 @@ const useBaseStore = defineStore('base', {
 			for (const nodeId in neighbors) {
 				const node = this.getNode(nodeId)
 				if (node) {
-					$set(node, 'neighbors', neighbors[nodeId])
+					node.neighbors = neighbors[nodeId]
 				}
 			}
 		},
@@ -356,6 +377,11 @@ const useBaseStore = defineStore('base', {
 				let lastTransmit = node.lastTransmit
 				let errorReceive = false
 				let errorTransmit = false
+
+				if (!node.statistics && data.statistics) {
+					// first statistics for this node, mesh graph needs update
+					emitMeshUpdate = true
+				}
 
 				if (node.statistics && data.statistics) {
 					if (node.isControllerNode) {
@@ -486,7 +512,7 @@ const useBaseStore = defineStore('base', {
 			for (const [nodeId, progress] of nodesProgress) {
 				const node = this.getNode(nodeId)
 				if (node) {
-					$set(node, 'rebuildRoutesProgress', progress)
+					node.rebuildRoutesProgress = progress
 				}
 			}
 		},
@@ -500,16 +526,44 @@ const useBaseStore = defineStore('base', {
 				if (!this.zwave.rf.txPower) {
 					this.zwave.rf.txPower = {}
 				}
+
 				Object.assign(this.mqtt, conf.mqtt || {})
 				Object.assign(this.zniffer, conf.zniffer || {})
 				Object.assign(this.gateway, conf.gateway || {})
 				Object.assign(this.backup, conf.backup || {})
 				Object.assign(this.ui, conf.ui || {})
 
-				// ensure local storage is in sync with the store
-				// to prevent theme switch on startup
-				this.setDarkMode(this.ui.darkMode)
+				// Update browser title if set in settings
+				if (this.ui.browserTitle) {
+					document.title = this.ui.browserTitle
+				}
 			}
+
+			// check if auth is changed in settings
+			const app = manager.getInstance(instances.APP)
+			if (app) {
+				app.checkAuth()
+			}
+		},
+		/**
+		 * Initialize the color scheme by:
+		 * - Setting up an event listener for preferred color scheme changes.
+		 *     This will set the dark mode only if `ui.colorScheme` is `'system'`.
+		 * - Setting the color scheme and dark mode to the value in settings.
+		 */
+		initColorScheme() {
+			prefersColorSchemeDark.addEventListener('change', (event) => {
+				// Bail if the color scheme is not set by the system.
+				if (this.ui.colorScheme !== 'system') {
+					return
+				}
+
+				this.setDarkMode(event.matches)
+			})
+
+			// ensure local storage is in sync with the store
+			// to prevent theme switch on startup
+			this.setColorScheme(this.ui.colorScheme)
 		},
 		initPorts(ports) {
 			if (ports) {
@@ -557,10 +611,13 @@ const useBaseStore = defineStore('base', {
 						this.tz = data.tz
 					} catch (e) {
 						log.error('Invalid timezone:', data.tz)
-						this.showSnackbar(
-							`Invalid timezone: ${data.tz}`,
-							'error',
-						)
+						const app = manager.getInstance(instances.APP)
+						if (app) {
+							app.showSnackbar(
+								`Invalid timezone: ${data.tz}`,
+								'error',
+							)
+						}
 					}
 				}
 
@@ -569,17 +626,30 @@ const useBaseStore = defineStore('base', {
 				}
 
 				this.initSettings(data.settings)
-				this.initPorts(data.serial_ports)
+				this.initColorScheme()
+				// serial_ports loaded separately now
+				if (data.serial_ports) {
+					this.initPorts(data.serial_ports)
+				}
 				this.initScales(data.scales)
 				this.initDevices(data.devices)
+				this.managedExternally = data.managedExternally || []
 
 				this.inited = true
 			}
 		},
+		/**
+		 * Sets the {@link ColorScheme} and updates the {@link DarkMode} accordingly.
+		 * @param {ColorScheme} value
+		 */
+		setColorScheme(value) {
+			settings.store('colorScheme', value)
+			this.ui.colorScheme = value
+			this.setDarkMode(colorSchemeToDarkMode(value))
+		},
 		setDarkMode(value) {
-			settings.store('dark', value)
 			// the `darkMode` watcher in App.vue will change vuetify theme
-			this.ui.darkMode = value
+			this.uiState.darkMode = value
 
 			const metaThemeColor = document.querySelector(
 				'meta[name=theme-color]',
@@ -588,12 +658,20 @@ const useBaseStore = defineStore('base', {
 				'meta[name=msapplication-TileColor]',
 			)
 
-			metaThemeColor.setAttribute('content', value ? '#000' : '#fff')
-			metaThemeColor2.setAttribute('content', value ? '#000' : '#fff')
+			if (metaThemeColor) {
+				metaThemeColor.setAttribute('content', value ? '#000' : '#fff')
+			}
+			if (metaThemeColor2) {
+				metaThemeColor2.setAttribute('content', value ? '#000' : '#fff')
+			}
 		},
 		setNavTabs(value) {
 			settings.store('navTabs', value)
 			this.ui.navTabs = value
+		},
+		setShowTabLabels(value) {
+			settings.store('showTabLabels', value)
+			this.ui.showTabLabels = value
 		},
 		setStreamerMode(value) {
 			settings.store('streamerMode', value)
@@ -602,6 +680,12 @@ const useBaseStore = defineStore('base', {
 		setCompactMode(value) {
 			settings.store('compact', value)
 			this.ui.compactMode = value
+		},
+		setBrowserTitle(value) {
+			const title = value || 'Z-Wave JS UI'
+			settings.store('browserTitle', title)
+			this.ui.browserTitle = title
+			document.title = title
 		},
 		getPreference(key, defaultValue) {
 			return {

@@ -1,35 +1,28 @@
 <template>
 	<v-container grid-list-md>
 		<v-row>
-			<v-col style="max-width: 260px; margin-top: -2px">
-				<v-btn-toggle dense multiple>
-					<v-tooltip
-						bottom
+			<v-col style="max-width: 280px; margin-top: -2px">
+				<v-btn-group density="compact" multiple>
+					<v-btn
+						size="small"
 						v-for="button in buttons"
 						:key="button.label"
-						:target="`#${button.id}`"
+						v-tooltip:bottom="button.tooltip"
+						:id="button.id"
+						:color="button.disabled ? 'grey' : button.color"
+						:disabled="button.disabled"
+						@click="button.action"
 					>
-						<template v-slot:activator="{ on }">
-							<v-btn
-								:id="button.id"
-								:color="button.color"
-								:disabled="button.disabled"
-								@click="button.action"
-								v-on="on"
-							>
-								<v-icon>{{ button.icon }}</v-icon>
-							</v-btn>
-						</template>
-						<span>{{ button.tooltip }}</span>
-					</v-tooltip>
-				</v-btn-toggle>
+						<v-icon>{{ button.icon }}</v-icon>
+					</v-btn>
+				</v-btn-group>
 			</v-col>
 
 			<v-col class="pa-2" cols="6">
 				<v-text-field
 					flat
-					outlined
-					dense
+					variant="outlined"
+					density="compact"
 					single-line
 					style="max-width: 300px"
 					label="Filter logs"
@@ -60,12 +53,10 @@
 	</v-container>
 </template>
 <script>
-import { socketEvents } from '@server/lib/SocketEvents'
-
 import { AnsiUp } from 'ansi_up'
-import { mapActions } from 'pinia'
-import useBaseStore from '../stores/base.js'
+import InstancesMixin from '../mixins/InstancesMixin.js'
 import { isPopupWindow, openInWindow } from '../lib/utils'
+import { nextTick } from 'vue'
 
 const ansiUp = new AnsiUp()
 
@@ -73,6 +64,7 @@ const MAX_DEBUG_LINES = 500
 
 export default {
 	name: 'Debug',
+	mixins: [InstancesMixin],
 	props: {
 		socket: Object,
 	},
@@ -92,7 +84,7 @@ export default {
 					id: 'start',
 					label: 'Start',
 					icon: 'play_arrow',
-					color: 'green',
+					color: 'success',
 					tooltip: 'Start',
 					action: () => this.toggleDebug(true),
 					disabled: this.debugActive,
@@ -101,7 +93,7 @@ export default {
 					id: 'stop',
 					label: 'Stop',
 					icon: 'stop',
-					color: 'red',
+					color: 'error',
 					tooltip: 'Stop',
 					action: () => this.toggleDebug(false),
 					disabled: !this.debugActive,
@@ -110,7 +102,7 @@ export default {
 					id: 'clear',
 					label: 'Clear',
 					icon: 'delete',
-					color: 'orange',
+					color: 'warning',
 					tooltip: 'Clear',
 					action: () => (this.debug = []),
 					disabled: this.debug.length === 0,
@@ -146,7 +138,6 @@ export default {
 		}
 	},
 	methods: {
-		...mapActions(useBaseStore, ['showSnackbar']),
 		toggleDebug(v) {
 			this.debugActive = v
 			this.showSnackbar('Debug ' + (v ? 'activated' : 'disabled'))
@@ -163,7 +154,7 @@ export default {
 				return
 			}
 
-			this.$nextTick(() => {
+			nextTick(() => {
 				const textarea = document.getElementById('debug_window')
 				if (textarea) {
 					// textarea could be hidden
@@ -191,7 +182,9 @@ export default {
 			this.hideTopbar = true
 		}
 
-		this.socket.on(socketEvents.debug, (data) => {
+		this.subscribeChannels(['debug'])
+
+		this.bindEvent('debug', (data) => {
 			if (this.debugActive) {
 				data = ansiUp.ansi_to_html(data)
 				data = data.replace(/\n/g, '</br>')
@@ -212,10 +205,9 @@ export default {
 			}
 		})
 	},
-	beforeDestroy() {
+	beforeUnmount() {
 		if (this.socket) {
-			// unbind events
-			this.socket.off(socketEvents.debug)
+			this.unbindEvents()
 		}
 	},
 }

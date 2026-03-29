@@ -1,8 +1,20 @@
 import path from 'path'
-import vue2 from '@vitejs/plugin-vue2'
+import { fileURLToPath } from 'url'
+import vue from '@vitejs/plugin-vue'
 import { defineConfig, loadEnv } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import vuetify, { transformAssetUrls } from 'vite-plugin-vuetify'
 import * as pkgJson from './package.json'
+
+import { globSync } from 'glob'
+
+// Get __dirname equivalent for ESM
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+const vuetifyComponents = globSync(
+	'node_modules/vuetify/lib/components/V*',
+).map((file) => file.replace('node_modules/vuetify/lib', 'vuetify'))
 
 const distFolder = path.resolve(__dirname, 'dist')
 
@@ -36,12 +48,33 @@ export default defineConfig(({ mode }) => {
 	process.env.VITE_API_ENDPOINT = proxyURL
 	return {
 		base: './',
+		// Optimize dependencies to prevent reloads during development
+		optimizeDeps: {
+			include: [
+				...vuetifyComponents.filter(
+					// VOverflowBtn has an issue during optimization, see https://github.com/vuetifyjs/vuetify-loader/issues/350#issuecomment-3129253379
+					(dep) => !dep.includes('VOverflowBtn'),
+				),
+			],
+		},
 		plugins: [
-			vue2(),
+			vue(),
+			vuetify({
+				template: {
+					transformAssetUrls,
+				},
+				autoImport: {
+					labs: true,
+					directives: true,
+				},
+			}),
 			VitePWA({
-				registerType: 'autoUpdate',
+				// do not reload application automatically but show a popup to user
+				registerType: 'prompt',
+				// when using inject manifes you can provide your own service worker
 				strategies: 'injectManifest',
-				injectRegister: 'auto',
+				// register service worker manually
+				injectRegister: false,
 				// https://vite-pwa-org.netlify.app/guide/inject-manifest.html#plugin-configuration-2
 				srcDir: 'src',
 				filename: 'sw.js',
@@ -51,6 +84,7 @@ export default defineConfig(({ mode }) => {
 					/* other options */
 				},
 				workbox: {
+					cleanupOutdatedCaches: true,
 					globIgnores: ['**/api/**'],
 				},
 				manifest: {
@@ -94,7 +128,7 @@ export default defineConfig(({ mode }) => {
 				},
 				{
 					find: /^@server\/(.+)/,
-					replacement: `${path.resolve(__dirname, 'src')}/$1`,
+					replacement: `${path.resolve(__dirname, 'server')}/$1`,
 				},
 			],
 			preserveSymlinks: true,
@@ -139,6 +173,7 @@ export default defineConfig(({ mode }) => {
 			outDir: distFolder,
 			sourcemap: false,
 			emptyOutDir: true,
+			chunkSizeWarningLimit: 1600,
 		},
 	}
 })

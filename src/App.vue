@@ -1,31 +1,28 @@
 <template>
-	<v-app :dark="darkMode">
+	<v-app>
+		<!-- Skip to main content link for keyboard accessibility -->
+		<a href="#main-content" class="skip-link">Skip to main content</a>
 		<div
 			v-if="$route.meta.requiresAuth && auth !== undefined && !hideTopbar"
 		>
 			<v-navigation-drawer
-				v-if="!navTabs || $vuetify.breakpoint.smAndDown"
-				clipped-left
-				:mini-variant="mini"
+				v-if="!navTabs || $vuetify.display.smAndDown"
+				:rail="mini"
 				v-model="drawer"
-				app
 			>
-				<v-list nav class="py-0">
-					<v-list-item :class="mini && 'px-0'">
-						<v-list-item-avatar>
-							<img
-								style="padding: 3px; border-radius: 0"
-								src="/logo.svg"
-							/>
-						</v-list-item-avatar>
-						<v-list-item-content>
-							<v-list-item-title>{{
-								'Z-Wave JS UI'
-							}}</v-list-item-title>
-						</v-list-item-content>
-					</v-list-item>
+				<v-list nav>
+					<div class="d-flex align-center">
+						<v-list-item
+							:class="mini && 'px-0'"
+							:title="'Z-Wave JS UI'"
+						>
+							<template #prepend>
+								<Logo size="40" />
+							</template>
+						</v-list-item>
+					</div>
 				</v-list>
-				<v-divider style="margin-top: 8px"></v-divider>
+				<v-divider></v-divider>
 				<v-list nav>
 					<v-list-item
 						v-for="item in pages"
@@ -33,30 +30,29 @@
 						:to="item.path === '#' ? '' : item.path"
 						:color="item.path === $route.path ? 'primary' : ''"
 					>
-						<v-list-item-action>
+						<template #prepend>
 							<v-badge
-								color="red"
-								:value="item.badge"
+								color="error"
+								:model-value="!!item.badge"
 								:content="item.badge"
 								dot
 							>
 								<v-icon>{{ item.icon }}</v-icon>
 							</v-badge>
-						</v-list-item-action>
-						<v-list-item-content>
-							<v-list-item-title
-								class="subtitle-2 font-weight-bold"
-								>{{ item.title }}</v-list-item-title
-							>
-						</v-list-item-content>
+						</template>
+
+						<v-list-item-title
+							class="text-subtitle-2 font-weight-bold"
+							>{{ item.title }}</v-list-item-title
+						>
 					</v-list-item>
 				</v-list>
 			</v-navigation-drawer>
 
-			<v-app-bar app>
-				<template v-if="!navTabs || $vuetify.breakpoint.smAndDown">
+			<v-app-bar>
+				<template v-if="!navTabs || $vuetify.display.smAndDown">
 					<v-app-bar-nav-icon @click.stop="toggleDrawer" />
-					<v-toolbar-title v-if="$vuetify.breakpoint.smAndUp">
+					<v-toolbar-title v-if="$vuetify.display.smAndUp">
 						{{ title }}
 					</v-toolbar-title>
 				</template>
@@ -69,14 +65,22 @@
 							class="smaller-min-width-tabs"
 						>
 							<v-icon
-								:left="item.path === $router.currentRoute.path"
-								:small="item.path === $router.currentRoute.path"
+								:start="
+									item.path === $route.path || showTabLabels
+								"
+								:size="
+									item.path === $route.path
+										? 'small'
+										: undefined
+								"
 							>
 								{{ item.icon }}
 							</v-icon>
 							<span
-								v-if="item.path === $router.currentRoute.path"
-								class="subtitle-2"
+								v-if="
+									item.path === $route.path || showTabLabels
+								"
+								class="text-subtitle-2"
 							>
 								{{ item.title }}
 							</span>
@@ -86,13 +90,14 @@
 
 				<v-spacer></v-spacer>
 
+				<!-- Controller status -->
 				<v-tooltip
 					v-if="zwave.enabled && appInfo.controllerStatus"
-					bottom
+					location="bottom"
 				>
-					<template v-slot:activator="{ on }">
+					<template #activator="{ props }">
 						<div
-							v-on="on"
+							v-bind="props"
 							:style="{
 								background: appInfo.controllerStatus.error
 									? 'rgb(244, 67, 54)'
@@ -114,48 +119,35 @@
 					</div>
 				</v-tooltip>
 
-				<v-tooltip
-					v-if="zwave.enabled && appInfo.controllerStatus"
-					bottom
+				<!-- Inlcusion state -->
+				<v-icon
+					v-if="zwave.enabled && inclusionState"
+					class="ml-3"
+					style="cursor: default"
+					:color="inclusionState.color"
+					v-tooltip:bottom="inclusionState.message"
 				>
-					<template v-slot:activator="{ on }">
-						<v-icon
-							class="ml-3"
-							dark
-							medium
-							style="cursor: default"
-							:color="inclusionState.color"
-							v-on="on"
-							>{{ inclusionState.icon }}</v-icon
-						>
-					</template>
-					<span>{{ inclusionState.message }}</span>
-				</v-tooltip>
+					{{ inclusionState.icon }}
+				</v-icon>
 
-				<v-tooltip bottom>
-					<template v-slot:activator="{ on }">
-						<v-icon
-							class="mr-3 ml-3"
-							dark
-							medium
-							style="cursor: default"
-							:color="statusColor || 'orange'"
-							v-on="on"
-							>swap_horizontal_circle</v-icon
-						>
-					</template>
-					<span>{{ status }}</span>
-				</v-tooltip>
+				<!-- Websocket status -->
+				<v-icon
+					class="mr-3 ml-3"
+					style="cursor: default"
+					:color="statusColor || 'warning'"
+					v-tooltip:bottom="status"
+				>
+					swap_horizontal_circle
+				</v-icon>
 
-				<v-tooltip z-index="9999" bottom open-on-click>
-					<template v-slot:activator="{ on }">
+				<!-- Info panel -->
+				<v-tooltip z-index="9999" location="bottom" open-on-click>
+					<template #activator="{ props }">
 						<v-icon
-							dark
-							medium
 							class="mr-3"
 							style="cursor: default"
 							color="primary"
-							v-on="on"
+							v-bind="props"
 							@click="copyVersion"
 							>info</v-icon
 						>
@@ -180,108 +172,88 @@
 					</div>
 				</v-tooltip>
 
-				<v-tooltip bottom>
-					<template v-slot:activator="{ on }">
-						<v-badge
-							v-on="on"
-							class="mr-3"
-							:content="updateAvailable"
-							:value="updateAvailable"
-							color="red"
-							overlap
-						>
-							<v-btn small icon @click="showUpdateDialog">
-								<v-icon dark medium color="primary"
-									>history</v-icon
-								>
-							</v-btn>
-						</v-badge>
-					</template>
-				</v-tooltip>
+				<!-- Update badge -->
+				<v-badge
+					class="mr-3"
+					:content="updateAvailable"
+					:model-value="!!updateAvailable"
+					v-tooltip:bottom="`Check Updates`"
+					color="error"
+				>
+					<v-btn
+						icon="history"
+						color="primary"
+						density="compact"
+						aria-label="Check for updates"
+						@click="showUpdateDialog"
+					>
+					</v-btn>
+				</v-badge>
 
 				<!-- Topbar collapsable menu items -->
+				<!-- Show more button on smaller screens -->
+				<v-menu v-if="$vuetify.display.xs" location="bottom left">
+					<template #activator="{ props }">
+						<v-btn
+							size="small"
+							v-bind="props"
+							icon
+							aria-label="More options"
+						>
+							<v-icon size="large">more_vert</v-icon>
+						</v-btn>
+					</template>
 
-				<span v-if="auth">
-					<!-- Show more button on smaller screens -->
-					<v-menu v-if="$vuetify.breakpoint.xsOnly" bottom left>
-						<template v-slot:activator="{ on }">
-							<v-btn small v-on="on" icon>
-								<v-icon>more_vert</v-icon>
+					<v-list>
+						<v-list-item
+							v-for="(item, i) in menuItems"
+							:key="i"
+							@click="item.func"
+							:title="item.tooltip"
+							:prepend-icon="item.icon"
+							:color="item.color || 'primary'"
+						>
+						</v-list-item>
+					</v-list>
+				</v-menu>
+
+				<!-- Menu items -->
+				<span v-else class="text-no-wrap">
+					<v-menu
+						v-for="item in menuItems"
+						:key="item.text"
+						location="bottom left"
+					>
+						<template #activator="{ props }">
+							<v-btn
+								density="compact"
+								class="mr-2"
+								v-bind="props"
+								v-tooltip:bottom="item.tooltip"
+								:icon="item.icon"
+								:color="item.color || 'primary'"
+								@click="item.func"
+							>
 							</v-btn>
 						</template>
 
-						<v-list>
+						<v-list v-if="item.menu">
 							<v-list-item
-								v-for="(item, i) in menu"
+								v-for="(menu, i) in item.menu"
 								:key="i"
-								@click="item.func"
+								@click="menu.func"
+								:title="menu.tooltip"
 							>
-								<v-list-item-action>
-									<v-icon>{{ item.icon }}</v-icon>
-								</v-list-item-action>
-								<v-list-item-title>{{
-									item.tooltip
-								}}</v-list-item-title>
 							</v-list-item>
 						</v-list>
 					</v-menu>
-
-					<!-- Menu items -->
-					<span v-else class="text-no-wrap">
-						<v-menu
-							v-for="item in menu"
-							:key="item.text"
-							bottom
-							left
-						>
-							<template v-slot:activator="{ on }">
-								<v-btn
-									small
-									class="mr-2"
-									v-on="on"
-									icon
-									@click="item.func"
-								>
-									<v-tooltip bottom>
-										<template v-slot:activator="{ on }">
-											<v-icon
-												dark
-												color="primary"
-												v-on="on"
-												>{{ item.icon }}</v-icon
-											>
-										</template>
-										<span>{{ item.tooltip }}</span>
-									</v-tooltip>
-								</v-btn>
-							</template>
-
-							<v-list v-if="item.menu">
-								<v-list-item
-									v-for="(menu, i) in item.menu"
-									:key="i"
-									@click="menu.func"
-								>
-									<v-list-item-title>{{
-										menu.title
-									}}</v-list-item-title>
-								</v-list-item>
-							</v-list>
-						</v-menu>
-					</span>
 				</span>
 			</v-app-bar>
 		</div>
-		<main style="height: 100%">
+		<main id="main-content" style="height: 100%">
 			<v-main style="height: 100%">
 				<template v-if="auth !== undefined">
-					<router-view
-						v-if="inited || !skeletons"
-						@import="importFile"
-						@export="exportConfiguration"
-						@showConfirm="confirm"
-						:socket="socket"
-					/>
+					<router-view v-if="inited || !skeletons" :socket="socket" />
 					<!-- put some skeleton loaders while fetching settings -->
 					<v-container v-else>
 						<v-skeleton-loader
@@ -308,20 +280,26 @@
 							size="200"
 							indeterminate
 						></v-progress-circular>
-						<v-btn text @click="checkAuth" v-else
-							>Retry <v-icon right dark>refresh</v-icon></v-btn
+						<v-btn variant="text" @click="checkAuth" v-else
+							>Retry <v-icon end>refresh</v-icon></v-btn
 						>
 					</v-col>
 				</v-row>
 				<v-footer
 					v-if="$route.path !== '/store'"
-					fixed
 					class="text-center"
+					style="
+						position: fixed;
+						bottom: 0;
+						left: 0;
+						right: 0;
+						z-index: 1000;
+					"
 				>
 					<v-col
 						class="d-flex pa-0 justify-center text-caption"
 						:style="{
-							fontSize: $vuetify.breakpoint.xsOnly
+							fontSize: $vuetify.display.xs
 								? '0.7rem !important'
 								: '',
 						}"
@@ -342,7 +320,7 @@
 		<PasswordDialog
 			@updatePassword="updatePassword()"
 			@close="closePasswordDialog()"
-			:show="dialog_password"
+			v-model="dialog_password"
 			:password="password"
 		/>
 
@@ -358,38 +336,19 @@
 			:indeterminate="loaderIndeterminate"
 		></LoaderDialog>
 
-		<v-snackbars
-			:objects.sync="messages"
-			:timeout="5000"
-			top
-			right
-			style="margin-top: 10px"
-		>
-			<template v-slot="{ message }">
-				<p
-					style="margin-bottom: 2px"
-					class="font-weight-bold"
-					v-if="message && message.title"
-				>
-					{{ message.title }}
-				</p>
-				<p
-					style="margin-bottom: 0; white-space: pre-wrap"
-					v-text="
-						typeof message === 'object' ? message.text : message
-					"
-				></p>
-			</template>
-			<template v-slot:action="{ close }">
-				<v-btn text @click="close">Close</v-btn>
-			</template>
-		</v-snackbars>
+		<VSonner position="top-right" :duration="5000" />
 
 		<DialogNodesManager
 			@open="nodesManagerDialog = true"
 			@close="nodesManagerDialog = false"
 			:socket="socket"
 			ref="nodesManager"
+		/>
+
+		<DialogFirmwareUpdate
+			v-model="firmwareUpdateDialog"
+			:node="firmwareUpdateNode"
+			:socket="socket"
 		/>
 	</v-app>
 </template>
@@ -422,7 +381,8 @@ code {
 <script>
 // https://github.com/socketio/socket.io-client/blob/master/docs/API.md
 import io from 'socket.io-client'
-import VSnackbars from 'v-snackbars'
+import 'vuetify-sonner/style.css'
+import { toast, VSonner } from 'vuetify-sonner'
 
 import ConfigApis from '@/apis/ConfigApis'
 import Confirm from '@/components/Confirm.vue'
@@ -431,7 +391,7 @@ import LoaderDialog from '@/components/dialogs/DialogLoader.vue'
 
 import { Routes } from '@/router'
 
-import { mapActions, mapState } from 'pinia'
+import { mapActions, mapState, mapWritableState } from 'pinia'
 import useBaseStore from './stores/base.js'
 import { manager, instances } from './lib/instanceManager'
 import logger from './lib/logger'
@@ -440,14 +400,14 @@ import {
 	socketEvents,
 	inboundEvents as socketActions,
 } from '@server/lib/SocketEvents'
-import {
-	getEnumMemberName,
-	SecurityBootstrapFailure,
-	FirmwareUpdateStatus,
-	InclusionState,
-} from 'zwave-js/safe'
+import { getEnumMemberName } from '@zwave-js/shared'
+import { FirmwareUpdateStatus } from '@zwave-js/cc'
+import { SecurityBootstrapFailure, InclusionState } from 'zwave-js'
 import DialogNodesManager from '@/components/dialogs/DialogNodesManager.vue'
+import DialogFirmwareUpdate from '@/components/dialogs/DialogFirmwareUpdate.vue'
 import { uuid } from './lib/utils'
+import InstancesMixin from './mixins/InstancesMixin.js'
+import Logo from '@/components/Logo.vue'
 
 let socketQueue = []
 
@@ -457,10 +417,13 @@ export default {
 	components: {
 		PasswordDialog,
 		LoaderDialog,
-		VSnackbars,
 		Confirm,
 		DialogNodesManager,
+		DialogFirmwareUpdate,
+		VSonner,
+		Logo,
 	},
+	mixins: [InstancesMixin],
 	name: 'app',
 	computed: {
 		...mapState(useBaseStore, [
@@ -472,11 +435,52 @@ export default {
 			'zwave',
 			'znifferState',
 			'inited',
+			'nodes',
 		]),
 		...mapState(useBaseStore, {
-			darkMode: (store) => store.ui.darkMode,
+			darkMode: (store) => store.uiState.darkMode,
 			navTabs: (store) => store.ui.navTabs,
+			showTabLabels: (store) => store.ui.showTabLabels,
 		}),
+		...mapWritableState(useBaseStore, ['debugCaptureActive']),
+		menuItems() {
+			const items = [
+				{
+					icon: 'troubleshoot',
+					color: this.debugCaptureActive ? 'error' : 'primary',
+					func: this.debugCaptureActive
+						? this.finishDebugCapture
+						: this.startDebugCapture,
+					tooltip: this.debugCaptureActive
+						? 'Finish Debug Capture'
+						: 'Start Debug Capture',
+				},
+				{
+					icon: 'lock',
+					authOnly: true,
+					func: this.showPasswordDialog,
+					tooltip: 'Password',
+				},
+				{
+					icon: 'refresh',
+					func: this.restart,
+					tooltip: 'Restart',
+				},
+				{
+					icon: 'logout',
+					authOnly: true,
+					func: this.logout,
+					tooltip: 'Logout',
+				},
+			]
+
+			return items.filter((item) => {
+				if (item.authOnly) {
+					return this.auth
+				}
+				return true
+			})
+		},
 		skeletons() {
 			// return the skeletons array based on actual route
 			const route = this.$route.path
@@ -524,6 +528,12 @@ export default {
 					icon: 'movie_filter',
 					title: 'Scenes',
 					path: Routes.scenes,
+				})
+
+				pages.splice(4, 0, {
+					icon: 'content_copy',
+					title: 'Templates',
+					path: Routes.configurationTemplates,
 				})
 
 				pages.push({
@@ -576,13 +586,13 @@ export default {
 				case InclusionState.Excluding:
 					toReturn.message = 'Exclusion is active'
 					toReturn.icon = 'cancel'
-					toReturn.color = 'red'
+					toReturn.color = 'error'
 					break
 				case InclusionState.Busy:
 					toReturn.message =
 						'Waiting for inclusion/exclusion to complete...'
 					toReturn.icon = 'hourglass_bottom'
-					toReturn.color = 'yellow'
+					toReturn.color = 'warning'
 					break
 				case InclusionState.SmartStart:
 					toReturn.message = 'SmartStart inclusion is active'
@@ -593,6 +603,10 @@ export default {
 
 			return toReturn
 		},
+		currentTheme() {
+			const { global } = this.$vuetify.theme
+			return global.current.colors
+		},
 	},
 	watch: {
 		$route(value) {
@@ -600,45 +614,10 @@ export default {
 			this.startSocket()
 		},
 		darkMode(val) {
-			this.$vuetify.theme.dark = !!val
+			this.$vuetify.theme.change(val ? 'dark' : 'light')
 		},
 		pages() {
 			// this.verifyRoute()
-		},
-		controllerNode(node) {
-			if (!node) return
-
-			if (node.firmwareUpdate) {
-				if (!this.dialogLoader) {
-					this.loaderTitle = ''
-					this.loaderText =
-						'Updating controller firmware, please wait...'
-					this.dialogLoader = true
-				}
-				this.loaderProgress = node.firmwareUpdate.progress
-				this.loaderIndeterminate = this.loaderProgress === 0
-			} else if (node.firmwareUpdateResult) {
-				this.dialogLoader = true // always open it to show the result, in case no progress is done it would be closed
-				this.loaderProgress = -1
-				this.loaderTitle = ''
-				const result = node.firmwareUpdateResult
-
-				useBaseStore().updateNode(
-					{
-						id: node.id,
-						firmwareUpdateResult: false,
-					},
-					true,
-				)
-
-				this.loaderText = `<span style="white-space: break-spaces;" class="${
-					result.success ? 'success' : 'error'
-				}--text">Controller firmware update finished ${
-					result.success
-						? 'successfully. It may take a few seconds for the stick to restart.'
-						: 'with error'
-				}.\n Status: ${result.status}</span>`
-			}
 		},
 	},
 	data() {
@@ -653,23 +632,8 @@ export default {
 			loaderIndeterminate: false,
 			password: {},
 			nodesManagerDialog: false,
-			menu: [
-				{
-					icon: 'lock',
-					func: this.showPasswordDialog,
-					tooltip: 'Password',
-				},
-				{
-					icon: 'refresh',
-					func: this.restart,
-					tooltip: 'Restart',
-				},
-				{
-					icon: 'logout',
-					func: this.logout,
-					tooltip: 'Logout',
-				},
-			],
+			firmwareUpdateDialog: false,
+			firmwareUpdateNode: null,
 			status: '',
 			statusColor: '',
 			drawer: false,
@@ -677,10 +641,139 @@ export default {
 			topbar: [],
 			hideTopbar: false,
 			title: '',
-			messages: [],
 		}
 	},
 	methods: {
+		async startDebugCapture() {
+			const result = await this.confirm(
+				'Start Debug Capture',
+				'<p>This wizard will help you collect a complete debug package.</p>' +
+					'<ul>' +
+					'<li>After starting, reproduce the issue you want to debug</li>' +
+					"<li>Click the debug indicator in the top bar when you're done</li>" +
+					'</ul>',
+				'info',
+				{
+					confirmText: 'Start Capture',
+					cancelText: 'Cancel',
+					width: 500,
+					inputs: [
+						{
+							type: 'checkbox',
+							key: 'restartDriver',
+							label: 'Restart driver to capture startup logs',
+							hint: 'Enable this to capture logs from the driver startup process',
+							default: false,
+						},
+					],
+				},
+			)
+
+			if (Object.keys(result).length === 0) {
+				return
+			}
+
+			try {
+				// Start debug capture with optional driver restart
+				const restartDriver = result.restartDriver || false
+				await ConfigApis.startDebugCapture(restartDriver)
+
+				this.showSnackbar('Debug capture started.', 'success')
+
+				// Update store state
+				this.debugCaptureActive = true
+
+				// Don't show redundant toast - user just saw instructions in dialog
+			} catch (error) {
+				this.showSnackbar(
+					`Failed to start debug capture: ${error.message}`,
+				)
+			}
+		},
+		async finishDebugCapture() {
+			// Get nodes for selection
+			const nodes = this.nodes.filter(
+				(n) => n.id !== this.controllerNode?.id,
+			)
+
+			// Show finish dialog with device selection using confirm
+			const result = await this.confirm(
+				'Finish Debug Capture',
+				'Select which devices to include detailed debug info for (optional):',
+				'success',
+				{
+					confirmText: 'Download',
+					cancelText: 'Cancel',
+					width: 600,
+					inputs: [
+						{
+							type: 'list',
+							key: 'nodeIds',
+							label: 'Devices',
+							multiple: true,
+							chips: true,
+							autocomplete: true,
+							items: nodes.map((node) => ({
+								title: `Node ${node.id}${node.manufacturer ? ` - ${node.manufacturer}` : ''}${node.productLabel || node.productDescription || node.product ? ` ${node.productLabel || node.productDescription || node.product}` : ''}${node.name && node.name !== `Node ${node.id}` ? ` (${node.name})` : ''}`,
+								value: node.id,
+							})),
+							default: [],
+						},
+					],
+				},
+			)
+
+			// Check if user cancelled
+			if (Object.keys(result).length === 0) {
+				// User cancelled - ask if they want to cancel the whole capture
+				const cancelCapture = await this.confirm(
+					'Cancel Debug Capture?',
+					'Do you want to cancel the debug capture session? This will discard all captured logs.',
+					'warning',
+					{
+						confirmText: 'Yes, Cancel',
+						cancelText: 'No, Go Back',
+					},
+				)
+
+				if (cancelCapture) {
+					try {
+						await ConfigApis.cancelDebugCapture()
+						this.debugCaptureActive = false
+						this.showSnackbar('Debug capture cancelled')
+					} catch (error) {
+						this.showSnackbar(
+							`Failed to cancel debug capture: ${error.message}`,
+						)
+					}
+				}
+				return
+			}
+
+			// Download debug package
+			const nodeIds = result.nodeIds || []
+
+			try {
+				// Stop capture and get download URL
+				const promise = ConfigApis.stopDebugCapture(nodeIds)
+
+				await this.showLoadingSnack(promise, {
+					loading: 'Generating debug package, please wait...',
+				})
+
+				this.showSnackbar(
+					'Debug package generated and download started.',
+					'success',
+				)
+				// Update store state
+				this.debugCaptureActive = false
+			} catch (error) {
+				this.showSnackbar(
+					`Failed to generate debug package: ${error.message}`,
+					'error',
+				)
+			}
+		},
 		verifyRoute() {
 			// ensure the actual route is available in pages otherwise redirect to the first one
 			if (
@@ -712,6 +805,30 @@ export default {
 			}
 			this.showNodesManager('')
 			this.$refs.nodesManager.onGrantSecurityCC(requested)
+		},
+		onOTWFirmwareUpdate(data) {
+			const { progress, result } = data
+			if (progress) {
+				if (!this.dialogLoader) {
+					this.dialogLoader = true
+				}
+				this.loaderTitle = ''
+				this.loaderText = 'Updating controller firmware, please wait...'
+				this.loaderProgress = progress.progress
+				this.loaderIndeterminate = this.loaderProgress === 0
+			} else if (result) {
+				this.dialogLoader = true // always open it to show the result, in case no progress is done it would be closed
+				this.loaderProgress = -1
+				this.loaderTitle = ''
+
+				this.loaderText = `<span style="white-space: break-spaces;" class="text-${
+					result.success ? 'success' : 'error'
+				}">Controller firmware update finished ${
+					result.success
+						? 'successfully 🎉. It may take a few seconds for the stick to restart.'
+						: 'with error ❌'
+				}.\n Status: ${result.status}</span>`
+			}
 		},
 		...mapActions(useBaseStore, [
 			'init',
@@ -767,12 +884,16 @@ export default {
 			this.password = {}
 			this.dialog_password = true
 		},
+		showFirmwareUpdateDialog(node) {
+			this.firmwareUpdateNode = node
+			this.firmwareUpdateDialog = true
+		},
 		async onNodeAdded({ node, result }) {
 			if (!this.nodesManagerDialog) {
 				await this.confirm2(
 					'Node added',
 					`<div class="d-flex flex-column align-center col">
-					<i aria-hidden="true" class="v-icon notranslate material-icons theme--light success--text" style="font-size: 60px;">check_circle</i>
+					<i aria-hidden="true" class="v-icon notranslate material-icons theme--light text-success" style="font-size: 60px;">check_circle</i>
 					<p class="mt-3 headline text-center">
 						Node ${node.id} added with security ${node.security || 'None'}${
 							result.lowSecurityReason
@@ -794,9 +915,7 @@ export default {
 			}
 		},
 		toggleDrawer() {
-			if (
-				['xs', 'sm', 'md'].indexOf(this.$vuetify.breakpoint.name) >= 0
-			) {
+			if (['xs', 'sm', 'md'].indexOf(this.$vuetify.display.name) >= 0) {
 				this.mini = false
 				this.drawer = !this.drawer
 			} else {
@@ -808,8 +927,8 @@ export default {
 			options = options || {}
 
 			const levelMap = {
-				warning: 'orange',
-				alert: 'red',
+				warning: 'warning',
+				alert: 'error',
 			}
 
 			options.color = options.color || levelMap[level] || 'primary'
@@ -820,24 +939,93 @@ export default {
 			options = options || {}
 
 			const levelMap = {
-				warning: 'orange',
-				alert: 'red',
+				warning: 'warning',
+				alert: 'error',
 			}
 
 			options.color = options.color || levelMap[level] || 'primary'
 
 			return this.$refs.confirm2.open(title, text, options)
 		},
-		showSnackbar(text, color, timeout) {
-			const message = {
-				message: text,
-				color: color || 'info',
-				timeout,
+		dismissSnackbar(toastId) {
+			toast.dismiss(toastId)
+		},
+		showSnackbar(text, color, options = { timeout: 3000 }) {
+			const { timeout, ...rest } = options
+			const toastOptions = {
+				duration: timeout || 3000,
+				progressBar: true,
+				cardProps: {
+					color: 'info',
+					minWidth: '300',
+				},
+				prependIcon: 'info',
+				action: {
+					buttonProps: {
+						icon: 'close',
+						size: 'small',
+					},
+					onClick: () => {},
+				},
+				...rest,
 			}
 
-			this.messages.push(message)
+			const iconMap = {
+				error: 'error',
+				success: 'check_circle',
+				warning: 'warning',
+				info: 'info',
+			}
+			toastOptions.cardProps.color = color || 'info'
+			toastOptions.prependIcon = iconMap[color] || 'info'
 
-			return message
+			return toast(text, toastOptions)
+		},
+		showLoadingSnack(promise, options) {
+			// return toast.toastOriginal.promise(promise, {
+			// 	loading: options.loading || 'Loading...',
+			// 	success: (data) => {
+			// 		return options.successText || data
+			// 	},
+			// 	error: (data) => {
+			// 		return options.errorText || data
+			// 	},
+			// 	richColors: true,
+			// 	// action: {
+			// 	// 	label: 'Close',
+			// 	// 	onClick: () => {},
+			// 	// },
+			// })
+
+			const loaderToastId = this.showSnackbar(
+				options.loading || 'Loading...',
+				'info',
+				{
+					timeout: Number.POSITIVE_INFINITY,
+					loading: true, // indeterminate progress bar
+				},
+			)
+
+			return promise
+				.then((data) => {
+					if (options.successText) {
+						this.showSnackbar(options.successText, 'success')
+					}
+					return data
+				})
+				.catch((error) => {
+					if (options.errorText) {
+						this.showSnackbar(
+							`${options.errorText}: ${error.message}`,
+							'error',
+						)
+					}
+					throw error
+				})
+				.finally(() => {
+					// Dismiss loader toast
+					toast.dismiss(loaderToastId)
+				})
 		},
 		apiRequest(
 			apiName,
@@ -918,6 +1106,10 @@ export default {
 						? 'installConfigUpdate'
 						: 'checkForConfigUpdates',
 					[],
+					{
+						infoSnack: false,
+						errorSnack: true,
+					},
 				)
 
 				this.showSnackbar(
@@ -926,7 +1118,6 @@ export default {
 			}
 		},
 		importFile(ext) {
-			const self = this
 			// Check for the various File API support.
 			return new Promise((resolve, reject) => {
 				if (
@@ -938,44 +1129,47 @@ export default {
 					const input = document.createElement('input')
 					input.type = 'file'
 					input.addEventListener('change', (event) => {
+						// Remove the input element after use
+						input.remove()
+
+						/** @type {Blob[]} */
 						const files = event.target.files
 
 						if (files && files.length > 0) {
 							const file = files[0]
-							const reader = new FileReader()
 
-							reader.addEventListener(
-								'load',
-								(fileReaderEvent) => {
-									let err
-									let data = fileReaderEvent.target.result
-
+							let readPromise
+							if (ext === 'buffer') {
+								readPromise = file.arrayBuffer()
+							} else {
+								readPromise = file.text().then((text) => {
 									if (ext === 'json') {
 										try {
-											data = JSON.parse(data)
+											return JSON.parse(text)
 										} catch (e) {
-											self.showSnackbar(
-												'Error while parsing input file, check console for more info',
-												'error',
+											log.error('Error parsing JSON:', e)
+											throw new Error(
+												'Invalid JSON, check console for more info',
 											)
-											console.error(e)
-											err = e
 										}
 									}
-
-									if (err) {
-										reject(err)
-									} else {
-										resolve({ data, file })
-									}
-								},
-							)
-
-							if (ext === 'buffer') {
-								reader.readAsArrayBuffer(file)
-							} else {
-								reader.readAsText(file)
+									return text
+								})
 							}
+
+							readPromise
+								.then((data) => {
+									log.debug('File loaded:', file.name, data)
+									resolve({ data, file })
+								})
+								.catch((error) => {
+									log.error('Error reading file:', error)
+									this.showSnackbar(
+										`Error reading file: ${error.message}`,
+										'error',
+									)
+									reject(error)
+								})
 						}
 					})
 
@@ -1011,7 +1205,7 @@ export default {
 		async restart() {
 			const result = await this.confirm(
 				'Restart',
-				'Are you sure you want to restart the ZUI?',
+				'Are you sure you want to restart ZUI?',
 				'warning',
 				{
 					width: 400,
@@ -1020,7 +1214,11 @@ export default {
 
 			if (result) {
 				try {
-					const data = await ConfigApis.updateConfig(false)
+					const data = await ConfigApis.restartGateway()
+
+					if (data.success) {
+						this.debugCaptureActive = false
+					}
 
 					this.showSnackbar(
 						data.message,
@@ -1116,6 +1314,13 @@ export default {
 			})
 			// convert node values in array
 			this.initNodes(data.nodes)
+
+			// Handle debug capture state persistence — only update when
+			// explicitly provided (server-pushed inits from ZwaveClient
+			// don't include this field, so avoid resetting it to undefined)
+			if (data.debugCaptureActive !== undefined) {
+				this.debugCaptureActive = data.debugCaptureActive
+			}
 		},
 		async startSocket() {
 			if (
@@ -1132,19 +1337,29 @@ export default {
 				return
 			}
 
-			const query = this.auth ? { token: this.user.token } : undefined
+			const auth = this.auth ? { token: this.user.token } : undefined
 
 			this.socket = io('/', {
 				path: location.pathname
 					? location.pathname + 'socket.io'
 					: undefined,
-				query: query,
+				auth: auth,
 				rejectUnauthorized: false,
 			})
 
+			this.subscribeChannels([
+				'controller',
+				'nodes',
+				'values',
+				'statistics',
+				'firmware',
+				'znifferState',
+			])
+
 			this.socket.on('connect', () => {
-				this.updateStatus('Connected', 'green')
+				this.updateStatus('Connected', 'success')
 				log.info('Socket connected')
+
 				this.socket.emit(
 					socketActions.init,
 					true,
@@ -1165,7 +1380,7 @@ export default {
 
 			this.socket.on('disconnect', () => {
 				log.info('Socket disconnected')
-				this.updateStatus('Disconnected', 'red')
+				this.updateStatus('Disconnected', 'error')
 			})
 
 			this.socket.on('error', (err) => {
@@ -1173,7 +1388,7 @@ export default {
 			})
 
 			this.socket.on('reconnecting', () => {
-				this.updateStatus('Reconnecting', 'yellow')
+				this.updateStatus('Reconnecting', 'warning')
 			})
 
 			if (log.enabledFor(logger.DEBUG)) {
@@ -1233,6 +1448,11 @@ export default {
 			this.socket.on(socketEvents.znifferState, (data) => {
 				this.setZnifferState(data)
 			})
+
+			this.socket.on(
+				socketEvents.otwFirmwareUpdate,
+				this.onOTWFirmwareUpdate.bind(this),
+			)
 			// don't await this, will cause a loop of calls
 			this.getConfig()
 		},
@@ -1310,6 +1530,7 @@ export default {
 			}`
 
 			let message = ''
+			let showDialog = true
 
 			if (result.success) {
 				if (
@@ -1321,11 +1542,8 @@ export default {
 				} else if (
 					result.status === FirmwareUpdateStatus.OK_RestartPending
 				) {
-					message = `<p>The device will now restart.${
-						result.waitTime
-							? ` This will take approximately <b>${result.waitTime}</b> seconds.`
-							: ''
-					}</p>`
+					// Don't show dialog for restart pending - device will restart automatically
+					showDialog = false
 				} else if (
 					// status is OK_NoRestart
 					result.waitTime &&
@@ -1381,11 +1599,14 @@ export default {
 				}
 			}
 
-			this.confirm(title, message, 'info', {
-				confirmText: 'Ok',
-				noCancel: true,
-				color: result.success ? 'success' : 'error',
-			})
+			// Only show the dialog if there's a meaningful message that requires user acknowledgment
+			if (showDialog && message) {
+				this.confirm(title, message, 'info', {
+					confirmText: 'Ok',
+					noCancel: true,
+					color: result.success ? 'success' : 'error',
+				})
+			}
 		},
 		async getRelease(project, version) {
 			try {
@@ -1442,6 +1663,12 @@ export default {
 			const settings = useBaseStore().gateway
 
 			const versions = settings?.versions
+
+			// Skip GitHub API call if both features are disabled
+			if (!settings.notifyNewVersions && settings?.disableChangelog) {
+				return
+			}
+
 			// get changelog from github latest release
 			try {
 				const latest = await this.getRelease('zwave-js-ui', 'latest')
@@ -1581,7 +1808,7 @@ export default {
 					// means we never saw the changelog for this version
 					const result = await this.confirm(
 						`Changelog`,
-						`<div style="line-height: 1.5rem">${changelog}</div>`,
+						`<div style="line-height: 1.5rem;" class="pa-4">${changelog}</div>`,
 						'info',
 						{
 							width: 1000,
@@ -1612,7 +1839,7 @@ export default {
 		this.checkAuth()
 	},
 	mounted() {
-		if (this.$vuetify.breakpoint.lg || this.$vuetify.breakpoint.xl) {
+		if (this.$vuetify.display.lg || this.$vuetify.display.xl) {
 			this.toggleDrawer()
 		}
 
@@ -1620,45 +1847,89 @@ export default {
 			this.hideTopbar = true
 		}
 
-		const settings = useBaseStore().settings
+		document.addEventListener(
+			'swUpdated',
+			(event) => {
+				this.confirm(
+					'Update available',
+					'New version available, do you want to refresh the page?',
+					'info',
+					{
+						cancelText: 'No',
+						confirmText: 'Yes',
+						width: 400,
+					},
+				).then(async (result) => {
+					if (result) {
+						await event.detail.updateSW()
+						// Wait for the new service worker to take control before reloading
+						if (navigator.serviceWorker) {
+							await new Promise((resolve) => {
+								const onControllerChange = () => {
+									navigator.serviceWorker.removeEventListener(
+										'controllerchange',
+										onControllerChange,
+									)
+									resolve()
+								}
+								navigator.serviceWorker.addEventListener(
+									'controllerchange',
+									onControllerChange,
+								)
+							})
+						}
+						window.location.reload()
+					}
+				})
+			},
+			{ once: true },
+		)
 
 		// system dark mode
-		const systemThemeDark = !!window.matchMedia(
-			'(prefers-color-scheme: dark)',
-		).matches
+		const darkMode = useBaseStore().uiState.darkMode
 
-		// set the dark mode to the system dark mode if it's different
-		if (settings.load('dark') === undefined) {
-			useBaseStore().setDarkMode(systemThemeDark)
-		} else {
-			// load the theme from localstorage
-			// this is needed to prevent the theme switch on load
-			// this will be overriden by settings value once `initSettings`
-			// base store method is called
-			this.$vuetify.theme.dark = settings.load('dark', false)
-		}
-
-		useBaseStore().$onAction(({ name, args }) => {
-			if (name === 'showSnackbar') {
-				this.showSnackbar(...args)
-			} else if (name === 'initSettings') {
-				// check if auth is changed in settings
-				this.checkAuth()
-			}
-		})
+		// this is needed to prevent the theme switch on load
+		// this will be overriden by settings value once `initSettings`
+		// base store method is called
+		this.$vuetify.theme.change(darkMode ? 'dark' : 'light')
 	},
-	beforeDestroy() {
+	beforeUnmount() {
+		this.unbindEvents()
 		if (this.socket) this.socket.close()
 	},
 }
 </script>
 
 <style scoped>
+/* Skip link for keyboard accessibility */
+.skip-link {
+	position: absolute;
+	top: -40px;
+	left: 0;
+	background: #1976d2;
+	color: white;
+	padding: 8px 16px;
+	text-decoration: none;
+	z-index: 9999;
+	border-radius: 0 0 4px 0;
+}
+
+.skip-link:focus {
+	top: 0;
+}
+
 .v-tabs :deep(.smaller-min-width-tabs) {
 	min-width: 60px;
 }
 
-:deep(.v-snack) {
-	top: 65px;
+:deep(:where([data-sonner-toaster][data-y-position='top'])) {
+	top: 70px !important;
+	right: 10px !important;
+}
+
+@media (max-width: 600px) {
+	:deep(:where([data-sonner-toaster][data-y-position='top'])) {
+		top: 10px !important;
+	}
 }
 </style>

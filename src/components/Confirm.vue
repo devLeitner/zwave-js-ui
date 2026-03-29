@@ -10,13 +10,14 @@
 			<v-toolbar
 				class="sticky-title"
 				:color="options.color"
-				dark
-				dense
+				density="compact"
 				flat
 			>
-				<v-toolbar-title class="white--text">{{
-					title
-				}}</v-toolbar-title>
+				<v-toolbar-title
+					class="text-white"
+					style="margin-inline-start: 16px"
+					>{{ title }}</v-toolbar-title
+				>
 			</v-toolbar>
 			<v-card-text
 				v-show="!!message"
@@ -24,11 +25,12 @@
 				class="px-4 pt-4"
 			></v-card-text>
 			<v-card-text v-if="options.inputs" class="px-4">
-				<v-container grid-list-md>
+				<v-container grid-list-md class="pa-0">
 					<v-form
 						v-model="valid"
 						ref="form"
-						lazy-validation
+						:id="id"
+						validate-on="lazy"
 						@submit.prevent="agree"
 					>
 						<v-row>
@@ -78,23 +80,25 @@
 									:rules="inputProps[input.key].rules"
 									:label="input.label"
 									:hint="input.hint"
+									:hide-details="!input.hint"
 									:persistent-hint="!!input.hint"
 									:required="input.required"
 									:disabled="input.disabled"
 								></v-checkbox>
 								<v-select
+									:menu-props="menuProps"
 									v-if="
 										input.type === 'list' &&
 										!input.allowManualEntry &&
 										!input.autocomplete
 									"
 									v-model="values[input.key]"
-									:item-text="input.itemText || 'text'"
+									:item-title="input.itemText || 'title'"
 									:item-value="input.itemValue || 'value'"
 									:items="input.items"
 									:rules="inputProps[input.key].rules"
 									:label="input.label"
-									@change="
+									@update:model-value="
 										inputProps[input.key].onChange($event)
 									"
 									:persistent-hint="!!input.hint"
@@ -109,13 +113,14 @@
 										!input.allowManualEntry &&
 										input.autocomplete
 									"
+									:menu-props="menuProps"
 									v-model="values[input.key]"
-									:item-text="input.itemText || 'text'"
+									:item-title="input.itemText || 'title'"
 									:item-value="input.itemValue || 'value'"
 									:items="input.items"
 									:rules="inputProps[input.key].rules"
 									:label="input.label"
-									@change="
+									@update:model-value="
 										inputProps[input.key].onChange($event)
 									"
 									:persistent-hint="!!input.hint"
@@ -129,8 +134,9 @@
 										input.type === 'list' &&
 										input.allowManualEntry
 									"
+									:menu-props="menuProps"
 									v-model="values[input.key]"
-									:item-text="input.itemText || 'text'"
+									:item-title="input.itemText || 'title'"
 									:item-value="input.itemValue || 'value'"
 									chips
 									:items="input.items"
@@ -146,6 +152,7 @@
 								</v-combobox>
 								<list-input
 									v-if="input.type === 'array' && input.list"
+									:menu-props="menuProps"
 									v-model="values[input.key]"
 									:rules="inputProps[input.key].rules"
 									:input="input"
@@ -181,13 +188,14 @@
 											inputProps[input.key].onChange()
 										"
 										:color="input.color"
-										:outlined="input.outlined"
+										:variant="
+											input.outlined
+												? 'outlined'
+												: undefined
+										"
+										:prepend-icon="input.icon"
 									>
-										<v-icon
-											class="mr-2"
-											v-if="input.icon"
-											>{{ input.icon }}</v-icon
-										>{{ input.label }}</v-btn
+										{{ input.label }}</v-btn
 									>
 								</v-container>
 							</v-col>
@@ -203,12 +211,12 @@
 					:rules="[validQR]"
 				></qr-reader>
 			</v-card-text>
-			<v-card-actions class="sticky-actions pt-0">
+			<v-card-actions class="sticky-actions pt-0 px-4">
 				<v-spacer></v-spacer>
 				<v-btn
 					v-if="!options.qrScan"
 					@click="agree"
-					text
+					variant="text"
 					:color="options.color"
 					>{{ options.confirmText }}</v-btn
 				>
@@ -216,7 +224,7 @@
 					v-if="options.cancelText && !options.noCancel"
 					@keydown.esc="cancel"
 					@click="cancel"
-					text
+					variant="text"
 					>{{ options.cancelText }}</v-btn
 				>
 			</v-card-actions>
@@ -225,7 +233,7 @@
 </template>
 
 <script>
-import { tryParseDSKFromQRCodeString } from '@zwave-js/core/safe'
+import { tryParseDSKFromQRCodeString } from '@zwave-js/core'
 import 'vue-prism-editor/dist/prismeditor.min.css' // import the styles somewhere
 
 // import highlighting library (you can use any library you want just return html string)
@@ -234,15 +242,19 @@ import 'prismjs/components/prism-clike'
 import 'prismjs/components/prism-javascript'
 import 'prismjs/themes/prism-tomorrow.css'
 import { wrapFunc, noop } from '../lib/utils'
+import { defineAsyncComponent } from 'vue'
+import { nextTick } from 'vue'
 
 export default {
 	components: {
-		PrismEditor: () =>
+		PrismEditor: defineAsyncComponent(() =>
 			import('vue-prism-editor').then((m) => m.PrismEditor),
-		QrReader: () => import('./custom/QrReader.vue'),
-		ListInput: () => import('./custom/ListInput.vue'),
+		),
+		QrReader: defineAsyncComponent(() => import('./custom/QrReader.vue')),
+		ListInput: defineAsyncComponent(() => import('./custom/ListInput.vue')),
 	},
 	data: () => ({
+		id: `confirm-form-${Math.random().toString(36).substring(2, 9)}`,
 		dialog: false,
 		resolve: null,
 		reject: null,
@@ -255,7 +267,7 @@ export default {
 		defaultOptions: {
 			color: 'primary',
 			width: 290,
-			zIndex: 200,
+			zIndex: 2500,
 			confirmText: 'Yes',
 			cancelText: 'Cancel',
 			persistent: false,
@@ -274,6 +286,9 @@ export default {
 					this.cancel()
 				}
 			},
+		},
+		menuProps() {
+			return { attach: `#${this.id}` }
 		},
 		inputs() {
 			const values = this.options.values || {}
@@ -301,12 +316,8 @@ export default {
 
 				if (!inited) {
 					if (input.default !== undefined) {
-						// without this code block is bugged, don't simply assign
-						this.$set(
-							this.values,
-							input.key,
-							values[input.key] ?? input.default,
-						)
+						this.values[input.key] =
+							values[input.key] ?? input.default
 					}
 
 					if (input.rules) {
@@ -365,7 +376,7 @@ export default {
 		},
 		async onDetect(qrString) {
 			this.dialog = false
-			await this.$nextTick()
+			await nextTick()
 			this.resolve(qrString)
 			this.reset()
 		},
@@ -373,6 +384,12 @@ export default {
 			return highlight(code, languages.js) // returns html
 		},
 		open(title, message, options) {
+			if (this.closeTimeout) {
+				clearTimeout(this.closeTimeout)
+				this.closeTimeout = null
+				this.reset()
+			}
+
 			this.dialog = true
 			this.title = title
 			this.message = message
@@ -381,27 +398,35 @@ export default {
 			Object.assign(this.options, options)
 
 			return new Promise((resolve, reject) => {
-				this.resolve = resolve
-				this.reject = reject
+				this.resolve = this.beforeClose(resolve)
+				this.reject = this.beforeClose(reject)
 			})
 		},
-		agree() {
+		/** Util function to prevent changing options while dialog is still shown */
+		beforeClose(fn) {
+			return (...args) => {
+				fn(...args)
+				this.closeTimeout = setTimeout(() => {
+					this.reset()
+					this.closeTimeout = null
+				}, 500)
+			}
+		},
+		async agree() {
 			if (this.options.inputs) {
-				if (this.$refs.form.validate()) {
+				const result = await this.$refs.form.validate()
+				if (result.valid) {
 					this.dialog = false
 					this.resolve(this.values)
-					this.reset()
 				}
 			} else {
 				this.dialog = false
 				this.resolve(true)
-				this.reset()
 			}
 		},
 		cancel() {
 			this.dialog = false
 			this.resolve(this.options.inputs ? {} : false)
-			this.reset()
 		},
 		reset() {
 			this.options = Object.assign({}, this.defaultOptions)
@@ -416,18 +441,35 @@ export default {
 </script>
 
 <style scoped>
-.v-card::v-deep .sticky-title {
+.v-card :deep(.sticky-title) {
 	position: sticky;
 	top: 0;
 	z-index: 3;
 	background-color: inherit;
-	border-bottom: 1px solid var(--v-secondary-base);
 }
 
-.v-card::v-deep .sticky-actions {
+.v-card :deep(.sticky-actions) {
 	position: sticky;
 	z-index: 3;
 	bottom: 0;
 	background-color: inherit;
+}
+
+/* Vuetify 3 global reset (`* { padding: 0; margin: 0 }`) strips default
+   browser spacing from HTML elements rendered via v-html in the message slot.
+   Restore sensible defaults for common block-level elements. */
+.v-card-text :deep(ul),
+.v-card-text :deep(ol) {
+	padding-inline-start: 24px;
+}
+
+.v-card-text :deep(h1),
+.v-card-text :deep(h2),
+.v-card-text :deep(h3),
+.v-card-text :deep(h4),
+.v-card-text :deep(h5),
+.v-card-text :deep(h6),
+.v-card-text :deep(p) {
+	margin-block: 0.5em;
 }
 </style>

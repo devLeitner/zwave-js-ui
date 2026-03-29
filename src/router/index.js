@@ -1,5 +1,4 @@
-import Vue from 'vue'
-import Router from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 
 // DON'T use lazy loading here, it would break application running behind a proxy
 const ControlPanel = () => import('@/views/ControlPanel.vue')
@@ -13,11 +12,11 @@ const ErrorPage = () => import('@/views/ErrorPage.vue')
 const SmartStart = () => import('@/views/SmartStart.vue')
 const ControllerChart = () => import('@/views/ControllerChart.vue')
 const Zniffer = () => import('@/views/Zniffer.vue')
+const ConfigurationTemplates = () =>
+	import('@/views/ConfigurationTemplates.vue')
 
 import ConfigApis from '../apis/ConfigApis'
 import useBaseStore from '../stores/base'
-
-Vue.use(Router)
 
 export const Routes = {
 	login: '/',
@@ -31,12 +30,13 @@ export const Routes = {
 	smartStart: '/smart-start',
 	controllerChart: '/controller-chart',
 	zniffer: '/zniffer',
+	configurationTemplates: '/configuration-templates',
 }
 
 Routes.main = Routes.controlPanel
 
-const router = new Router({
-	mode: 'hash',
+const router = createRouter({
+	history: createWebHashHistory(),
 	routes: [
 		{
 			path: Routes.login,
@@ -88,6 +88,15 @@ const router = new Router({
 			path: Routes.scenes,
 			name: 'Scenes',
 			component: Scenes,
+			props: true,
+			meta: {
+				requiresAuth: true,
+			},
+		},
+		{
+			path: Routes.configurationTemplates,
+			name: 'Configuration Templates',
+			component: ConfigurationTemplates,
 			props: true,
 			meta: {
 				requiresAuth: true,

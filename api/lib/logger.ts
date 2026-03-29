@@ -1,16 +1,15 @@
-import DailyRotateFile, {
-	DailyRotateFileTransportOptions,
-} from 'winston-daily-rotate-file'
-import { ensureDirSync } from 'fs-extra'
+import type { DailyRotateFileTransportOptions } from 'winston-daily-rotate-file'
+import DailyRotateFile from 'winston-daily-rotate-file'
 import winston from 'winston'
-import { logsDir, storeDir } from '../config/app'
-import { GatewayConfig } from './Gateway'
-import { DeepPartial, joinPath } from './utils'
-import * as path from 'path'
-import { readdir, stat, unlink } from 'fs/promises'
-import { Stats } from 'fs'
+import { logsDir, storeDir } from '../config/app.ts'
+import type { GatewayConfig } from './Gateway.ts'
+import type { DeepPartial } from './utils.ts'
+import { joinPath, ensureDirSync } from './utils.ts'
+import * as path from 'node:path'
+import { readdir, stat, unlink } from 'node:fs/promises'
+import type { Stats } from 'node:fs'
 import escapeStringRegexp from '@esm2cjs/escape-string-regexp'
-import { PassThrough } from 'stream'
+import { PassThrough } from 'node:stream'
 
 const { format, transports, addColors } = winston
 const { combine, timestamp, printf, colorize, splat } = format
@@ -87,7 +86,7 @@ export function customFormat(noColor = false): winston.Logform.Format {
 
 	// must be added at last
 	formats.push(
-		printf((info) => {
+		printf((info: any) => {
 			if (!noColor) {
 				info.timestamp = colorizer.colorize('time', info.timestamp)
 				info.module = colorizer.colorize('module', info.module)
@@ -132,7 +131,7 @@ export function customTransports(config: LoggerConfig): winston.transport[] {
 
 	transportsList.push(streamTransport)
 
-	if (config.logToFile) {
+	if (config.enabled && config.logToFile) {
 		let fileTransport: winston.transport
 
 		if (process.env.DISABLE_LOG_ROTATION === 'true') {
@@ -168,6 +167,9 @@ export function customTransports(config: LoggerConfig): winston.transport[] {
 	// increeasing the default limit of 100 prevents warnings
 	transportsList.forEach((t) => {
 		t.setMaxListeners(100)
+		if (t !== streamTransport) {
+			t.silent = config.enabled === false
+		}
 	})
 
 	return transportsList
@@ -194,7 +196,6 @@ export function setupLogger(
 			format.errors({ stack: true }),
 			format.json(),
 		), // to correctly parse errors
-		silent: !sanitized.enabled,
 		level: sanitized.level,
 		transports: customTransports(sanitized),
 	})
@@ -379,5 +380,7 @@ export function stopCleanJob() {
 		cleanJob = undefined
 	}
 }
+
+export { logContainer }
 
 export default logContainer.loggers

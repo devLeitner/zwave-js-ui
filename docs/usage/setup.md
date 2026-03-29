@@ -2,6 +2,17 @@
 
 To configure Z-Wave JS UI, you must access it via your web browser at <http://localhost:8091> on the machine on which it was run, or at the IP address of your remote installation on port 8091.
 
+## UI
+
+These settings control the appearance and behavior of the Z-Wave JS UI interface:
+
+- **Color Scheme**: Select the color theme for the UI
+- **Use tabs for navigation**: Enable this to use tabs in the top bar instead of a left menu for navigation (useful when integrated in Home Assistant)
+- **Show labels on all tabs**: Show labels under all navigation tabs (only when tabs for navigation is enabled)
+- **Streamer mode**: Enable this to hide sensitive information from the UI
+- **Compact view by default**: Enable this to use compact view by default in the Control Panel (can be toggled with the Compact button)
+- **Browser title**: Customize the browser tab title (useful when managing multiple hubs)
+
 ## General
 
 - **Auth**: Enable this to password protect your application. Default credentials are:
@@ -74,6 +85,8 @@ NVM:
   - **S2 Unauthenticated**: Like S2 Authenticated, but without verification that the correct device is included (skip DSK verification step)
   - **S2 Authenticated**: Security systems, sensors, lighting, etc.
   - **S2 AccessControl** (highest): Used for Door locks, garage doors, etc.
+  - **S2 Authenticated (Long Range)**: Long Range S2 Authenticated key
+  - **S2 Access Control (Long Range)**: Long Range S2 Access Control key
 
 > [!NOTE]
 >
@@ -84,7 +97,6 @@ NVM:
 > - **Backup these keys!**
 
 - **Enable statistics**: Please enable usage statistics! More info [here](/usage_stats)
-- **Soft reset**: Soft Reset is required after some commands like changing the RF region or restoring an NVM backup. Because it may cause problems in Docker containers with certain Z-Wave sticks, this functionality may be disabled.
 - **Preferred scales**: Choose preferred sensor scales
 - **Log enabled**: Enable logging for Z-Wave JS websocket server
 - **Log level**: Set the log level (Error, Warn, Info, Verbose, Debug, Silly)
@@ -92,6 +104,24 @@ NVM:
 - **Log nodes**: Filter Z-Wave JS logs to log just this nodes
 - **Inclusion/Exclusion timeout**: Seconds to wait before automatically stopping inclusion/exclusion
 - **Node events queue**: Maximum number of events to queue in memory for each node.
+- **Max log files**: Maximum number of Z-Wave JS log files to keep
+- **Response timeout**: How long to wait for a controller response in milliseconds. Leave blank to use the default (10000ms)
+- **Send to sleep timeout**: How long to wait without pending commands before sending a node back to sleep in milliseconds. Leave blank to use the default (250ms)
+- **Increase node report timeout**: This can help with the inclusion or interview of some devices, but can also slow down communication
+- **Soft reset**: Soft Reset is required after some commands like changing the RF region or restoring an NVM backup. Because it may cause problems in Docker containers with certain Z-Wave sticks, this functionality may be disabled
+- **Controller recovery**: When disabled, commands will simply fail when the controller is unresponsive and nodes may get randomly marked as dead until the controller recovers on its own
+- **Watchdog**: Controllers of the 700 series and newer have a hardware watchdog that can be enabled to automatically reset the chip in case it becomes unresponsive
+- **Bootloader only**: Enable this to start the driver in bootloader-only mode, useful to recover sticks when a firmware upgrade fails. When enabled, the stick will NOT be able to communicate with the network
+- **Disable optimistic value updates**: Some SET-type commands optimistically update the current value to match the target value when the device acknowledges the command. While this generally makes UIs feel more responsive, it is not necessary for devices which report their status on their own and can lead to confusing behavior when dealing with slow devices like blinds
+- **Disable automatic firmware update checks**: When enabled, the application will not automatically check for firmware updates in the background. You can still manually check for updates from the node's firmware update tab
+
+### RF Configuration
+
+- **Automatic Power Level**: When enabled, both normal and Long Range power levels will be automatically set to legal limits based on the RF region whenever the region is changed. Only supported for Europe and USA regions
+- **Normal Power Level**: Power level in dBm (range: -10 to +20, depending on the Z-Wave chip). Applied on every startup if the current setting differs. Not all controllers support changing the power level
+- **Measured output power at 0 dBm**: Measured output power at 0 dBm in dBm (range: -10 to +10). Applied on every startup if the current setting differs
+- **Maximum LR Power Level**: The maximum power level to be used by the dynamic power algorithm of Z-Wave Long Range. Applied on every startup if the current setting differs. Only LR-capable controllers support this setting
+
 - **Hidden settings**: Advanced settings not visible to the user interface, you can edit these by setting in the `settings.json` file you fins in store directory
   - `zwave.options` overrides options passed to the Z-Wave JS Driver constructor [ZWaveOptions](https://zwave-js.github.io/node-zwave-js/#/api/driver?id=zwaveoptions)
 
@@ -267,3 +297,173 @@ Once finished press `SAVE` and the gateway will start a Z-Wave Network Scan.
 ## Backing Up Settings
 
 Settings, scenes and the Z-Wave configuration are stored in `JSON` files under the project `store` folder. It is a good idea to backup those files, which can be done by backing up the `store` or using the **import/export** buttons.
+
+## Zniffer
+
+The Zniffer feature allows you to use a second Z-Wave controller as a packet sniffer for debugging and analysis:
+
+- **Enabled**: Enable the Zniffer packet capture
+- **Serial port**: The serial port of the Zniffer controller (must be a separate controller from the main one)
+- **Security Keys**: Security keys for decrypting captured packets. Same format as the main Z-Wave security keys (S0_Legacy, S2_Unauthenticated, S2_Authenticated, S2_AccessControl) and Long Range keys (S2_Authenticated, S2_AccessControl)
+- **Convert RSSI**: Convert RSSI values to dBm
+- **Default Frequency**: Default frequency for the Zniffer
+- **Log enabled**: Enable logging for the Zniffer
+- **Log level**: Set the Zniffer log level
+- **Log to file**: Enable this to store Zniffer logs to a file
+- **Log nodes filter**: Choose which nodes to log. Leave empty to log all nodes
+
+## Embedding Z-Wave JS UI
+
+Z-Wave JS UI can be embedded in other software (e.g., Home Assistant add-ons) where certain settings are managed externally. When running in embedded mode, externally managed settings are hidden from the UI and controlled through environment variables and configuration files.
+
+### Controller Port Override
+
+Use the `ZWAVE_PORT` environment variable to force-enable the Z-Wave controller and override the configured serial port:
+
+```bash
+ZWAVE_PORT=/dev/ttyUSB0
+# or for TCP connections:
+ZWAVE_PORT=tcp://192.168.1.100:5555
+```
+
+When `ZWAVE_PORT` is set:
+
+- The Z-Wave controller is automatically enabled
+- The configured port is overridden with the value from the environment variable
+- Serial port enumeration and selection are disabled in the UI
+- The UI displays a message indicating the port is controlled by the environment variable
+
+### External Settings Management
+
+Use the `ZWAVE_EXTERNAL_SETTINGS` environment variable to provide a path to a JSON file containing externally managed driver and server settings:
+
+```bash
+ZWAVE_EXTERNAL_SETTINGS=/path/to/external-settings.json
+```
+
+When `ZWAVE_EXTERNAL_SETTINGS` is set:
+
+- Settings in the external file override those in `settings.json`
+- UI controls for externally managed settings are hidden
+- The external settings file is loaded once at startup and cached
+
+#### External Settings File Format
+
+The external settings file should be a JSON file with the following structure:
+
+```json
+{
+  "logEnabled": true,
+  "logLevel": "info",
+  "logToFile": true,
+  "maxFiles": 7,
+  "rf": {
+    "region": 0,
+    "autoPowerlevels": true
+  },
+  "securityKeys": {
+    "S0_Legacy": "0102030405060708090A0B0C0D0E0F10",
+    "S2_Unauthenticated": "1112131415161718191A1B1C1D1E1F20",
+    "S2_Authenticated": "2122232425262728292A2B2C2D2E2F30",
+    "S2_AccessControl": "3132333435363738393A3B3C3D3E3F40"
+  },
+  "securityKeysLongRange": {
+    "S2_Authenticated": "4142434445464748494A4B4C4D4E4F50",
+    "S2_AccessControl": "5152535455565758595A5B5C5D5E5F60"
+  },
+  "enableSoftReset": true,
+  "serverEnabled": true,
+  "serverPort": 3000,
+  "serverHost": "0.0.0.0",
+  "serverServiceDiscoveryDisabled": false
+}
+```
+
+#### Supported External Settings
+
+**Logging Settings** (configurable in UI):
+
+- `logEnabled` (boolean): Enable Z-Wave JS logging
+- `logLevel` (string): Log level (error, warn, info, verbose, debug, silly)
+- `logToFile` (boolean): Enable logging to file
+- `maxFiles` (number): Maximum number of log files to keep
+
+**Logging Settings** (driver-only, no UI configuration):
+
+- `logFilename` (string): Custom log filename
+- `forceConsole` (boolean): Force console logging even when logging to file
+
+**RF Settings**:
+
+- `rf.region` (number): RF region code
+- `rf.autoPowerlevels` (boolean): Enable automatic TX power level adjustment
+
+**Storage Settings** (driver-only):
+
+- `storage.cacheDir` (string): Custom cache directory path
+- `storage.throttle` (string): Storage throttle mode (normal, slow, fast)
+
+**Security Keys**:
+
+- `securityKeys.S0_Legacy` (string): Legacy S0 key (32 hex characters)
+- `securityKeys.S2_Unauthenticated` (string): S2 Unauthenticated key
+- `securityKeys.S2_Authenticated` (string): S2 Authenticated key
+- `securityKeys.S2_AccessControl` (string): S2 Access Control key
+- `securityKeysLongRange.S2_Authenticated` (string): Long Range S2 Authenticated key
+- `securityKeysLongRange.S2_AccessControl` (string): Long Range S2 Access Control key
+
+**Features**:
+
+- `enableSoftReset` (boolean): Enable soft reset functionality
+
+**Z-Wave JS Server Settings**:
+
+- `serverEnabled` (boolean): Enable Z-Wave JS websocket server
+- `serverPort` (number): Websocket server port
+- `serverHost` (string): Websocket server host
+- `serverServiceDiscoveryDisabled` (boolean): Disable DNS service discovery
+
+**Driver Presets** (driver-only):
+
+- `presets` (string[]): Array of preset names to apply (e.g., `["zniffer"]`)
+
+> [!NOTE]
+> Settings marked as "driver-only" are passed directly to the Z-Wave JS driver and have no corresponding UI configuration. They can only be configured through the external settings file.
+
+#### Example: Home Assistant Add-on Configuration
+
+When embedding Z-Wave JS UI in a Home Assistant add-on, you might use:
+
+```bash
+# Force controller port
+ZWAVE_PORT=/dev/serial/by-id/usb-0658_0200-if00
+
+# External settings for security keys and server config
+ZWAVE_EXTERNAL_SETTINGS=/config/zwave-external-settings.json
+```
+
+With an external settings file like:
+
+```json
+{
+  "logEnabled": true,
+  "logLevel": "info",
+  "logToFile": false,
+  "securityKeys": {
+    "S0_Legacy": "<generated-by-addon>",
+    "S2_Unauthenticated": "<generated-by-addon>",
+    "S2_Authenticated": "<generated-by-addon>",
+    "S2_AccessControl": "<generated-by-addon>"
+  },
+  "serverEnabled": true,
+  "serverPort": 3000,
+  "serverHost": "0.0.0.0"
+}
+```
+
+This configuration allows the add-on to:
+
+- Control the Z-Wave controller port
+- Manage security keys without exposing them in the UI
+- Configure the websocket server for Home Assistant integration
+- Hide these settings from users to prevent accidental changes
